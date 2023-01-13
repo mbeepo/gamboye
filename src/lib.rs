@@ -1,5 +1,5 @@
 mod cpu;
-mod gbc;
+mod gameboy;
 mod memory;
 
-pub use gbc::Gbc;
+pub use gameboy::Gbc;
