@@ -1,6 +1,6 @@
 use self::{
     instruction::{ArithmeticTarget, HLArithmeticTarget, Instruction},
-    registers::{Flags, Registers},
+    registers::Registers,
 };
 
 mod instruction;
@@ -20,7 +20,7 @@ impl Cpu {
     /// Executes a single instruction
     pub fn execute(&mut self, instruction: Instruction) {
         match instruction {
-            Instruction::ADD(target) => {
+            Instruction::ADD(target) | Instruction::ADC(target) | Instruction::SUB(target) => {
                 let value = match target {
                     ArithmeticTarget::A => self.registers.a,
                     ArithmeticTarget::B => self.registers.b,
@@ -31,7 +31,13 @@ impl Cpu {
                     ArithmeticTarget::L => self.registers.l,
                 };
 
-                let new_value = self.add(value);
+                let new_value = match instruction {
+                    Instruction::ADD(_) => self.add(value),
+                    Instruction::ADC(_) => self.add_carry(value),
+                    Instruction::SUB(_) => self.sub(value),
+                    _ => unreachable!(),
+                };
+
                 self.registers.a = new_value;
             }
             Instruction::ADDHL(target) => {
@@ -47,38 +53,5 @@ impl Cpu {
             }
             _ => todo!(),
         }
-    }
-
-    /// Adds a u8 to register A, setting required flags
-    fn add(&mut self, value: u8) -> u8 {
-        let (new_value, overflowed) = self.registers.a.overflowing_add(value);
-
-        self.registers.f.zero = new_value == 0;
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = (self.registers.a & 0xF) + (value & 0xF) > 0xF;
-        self.registers.f.carry = overflowed;
-
-        new_value
-    }
-
-    fn add_hl(&mut self, value: u16) -> u16 {
-        let (new_value, overflowed) = self.registers.get_hl().overflowing_add(value);
-
-        self.registers.f.zero = new_value == 0;
-        self.registers.f.subtract = false;
-        self.registers.f.half_carry = (self.registers.l & 0xF) + (value & 0xF) as u8 > 0xF;
-        self.registers.f.carry = overflowed;
-
-        new_value
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Cpu;
-
-    #[test]
-    fn add_small() {
-        let cpu = Cpu::new();
     }
 }

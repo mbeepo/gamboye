@@ -1,8 +1,14 @@
+mod arithmetic;
+
+#[derive(Clone, Copy, Debug)]
 pub enum Instruction {
     ADD(ArithmeticTarget),
+    ADC(ArithmeticTarget),
+    SUB(ArithmeticTarget),
     ADDHL(HLArithmeticTarget),
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum ArithmeticTarget {
     A,
     B,
@@ -13,6 +19,7 @@ pub enum ArithmeticTarget {
     L,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum HLArithmeticTarget {
     BC,
     DE,
