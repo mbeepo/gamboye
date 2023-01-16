@@ -1,8 +1,8 @@
 use super::Mbc;
 
 pub struct NoMbc {
-    rom: [u8; 0x8000],
-    ram: [u8; 0x2000],
+    rom: [Option<u8>; 0x8000],
+    ram: [Option<u8>; 0x2000],
 }
 
 enum NoMbcAddr {
@@ -11,7 +11,7 @@ enum NoMbcAddr {
 }
 
 impl Mbc for NoMbc {
-    fn get(&self, addr: u16) -> u8 {
+    fn get(&self, addr: u16) -> Option<u8> {
         let addr = self.translate(addr);
 
         match addr {
@@ -24,8 +24,8 @@ impl Mbc for NoMbc {
         let addr = self.translate(addr);
 
         match addr {
-            NoMbcAddr::Rom(a) => self.rom[a as usize] = value,
-            NoMbcAddr::Ram(a) => self.ram[a as usize] = value,
+            NoMbcAddr::Rom(a) => self.rom[a as usize] = Some(value),
+            NoMbcAddr::Ram(a) => self.ram[a as usize] = Some(value),
         }
     }
 }
@@ -33,8 +33,8 @@ impl Mbc for NoMbc {
 impl NoMbc {
     pub fn new() -> Self {
         Self {
-            rom: [0; 0x8000],
-            ram: [0; 0x2000],
+            rom: [None; 0x8000],
+            ram: [None; 0x2000],
         }
     }
 
@@ -50,7 +50,7 @@ impl NoMbc {
 
             NoMbcAddr::Ram(addr)
         } else {
-            panic!("Invalid memory translation: ${addr:04X}");
+            panic!("Invalid memory translation: ${addr:#06x}");
         }
     }
 }

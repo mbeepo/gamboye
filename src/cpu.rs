@@ -35,6 +35,7 @@ impl Cpu {
                     Instruction::ADD(_) => self.add(value),
                     Instruction::ADC(_) => self.add_carry(value),
                     Instruction::SUB(_) => self.sub(value),
+                    Instruction::SBC(_) => self.sub_carry(value),
                     _ => unreachable!(),
                 };
 

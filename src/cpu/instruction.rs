@@ -5,6 +5,7 @@ pub enum Instruction {
     ADD(ArithmeticTarget),
     ADC(ArithmeticTarget),
     SUB(ArithmeticTarget),
+    SBC(ArithmeticTarget),
     ADDHL(HLArithmeticTarget),
 }
 

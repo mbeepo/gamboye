@@ -5,11 +5,13 @@ impl Cpu {
     // ---------- 8 bit ----------
     /// Adds a u8 to register A
     pub fn add(&mut self, value: u8) -> u8 {
+        println!("value: {value}, {value:#010b}");
+
         let (new_value, overflowed) = self.registers.a.overflowing_add(value);
 
         self.registers.f.zero = new_value == 0;
         self.registers.f.subtract = false;
-        self.registers.f.half_carry = (self.registers.a & 0xF) + (value & 0xF) > 0xF;
+        self.registers.f.half_carry = (self.registers.a & 0xF) + (value & 0xF) & 0x10 == 0x10;
         self.registers.f.carry = overflowed;
 
         new_value
@@ -17,6 +19,7 @@ impl Cpu {
 
     // Adds a u8 and the carry bit to register A
     pub fn add_carry(&mut self, value: u8) -> u8 {
+        /*
         let (new_value, overflowed) = self.registers.a.overflowing_add(value);
         let (new_value, overflowed2) =
             new_value.overflowing_add((self.registers.f.as_bits() >> 4) & 1);
@@ -31,18 +34,26 @@ impl Cpu {
         self.registers.f.carry = overflowed || overflowed2;
 
         new_value
+        */
+        self.add(value + 1)
     }
 
     /// Subtracts a u8 from register A
     pub fn sub(&mut self, value: u8) -> u8 {
-        let (new_value, overflowed) = self.registers.a.overflowing_sub(value);
+        println!("value: {value}, {value:#010b}");
+        println!("value: {}, {:#010b}", !value + 1, !value + 1);
+        println!("value: {}, {:#010b}", (!value) + 1, (!value) + 1);
 
-        self.registers.f.zero = new_value == 0;
+        let out = self.add(!value + 1);
         self.registers.f.subtract = true;
-        self.registers.f.half_carry = ((self.registers.a & 0xF0) - (value & 0xF0)) & 0x10 == 1 << 1;
-        self.registers.f.carry = overflowed;
+        out
+    }
 
-        new_value
+    // Subtracts a u8 and the carry bit from register A
+    pub fn sub_carry(&mut self, value: u8) -> u8 {
+        let out = self.add_carry(!value + 1);
+        self.registers.f.subtract = true;
+        out
     }
 
     // ---------- 16 bit ----------
@@ -53,7 +64,7 @@ impl Cpu {
 
         self.registers.f.zero = new_value == 0;
         self.registers.f.subtract = false;
-        self.registers.f.half_carry = (self.registers.l & 0xF) + (value & 0xF) as u8 > 0xF;
+        self.registers.f.half_carry = (self.registers.l & 0xF) + (value & 0xF) as u8 & 0x10 == 0x10;
         self.registers.f.carry = overflowed;
 
         new_value
@@ -150,7 +161,7 @@ mod tests {
         cpu.execute(Instruction::SUB(ArithmeticTarget::B));
 
         assert_eq!(cpu.registers.a, 2);
-        assert_eq!(cpu.registers.f.as_bits(), 0b0100_0000);
+        assert_eq!(cpu.registers.f.as_bits(), 0b0111_0000);
     }
 
     #[test]

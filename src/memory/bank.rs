@@ -21,7 +21,7 @@ impl VramBank {
         if addr < 0x2000 {
             self.memory[self.selected as usize][addr as usize]
         } else {
-            panic!("Invalid VRAM access (address out of bounds): {addr:04X}");
+            panic!("Invalid VRAM access (address out of bounds): {addr:#06x}");
         }
     }
 
@@ -29,7 +29,7 @@ impl VramBank {
         if addr < 0x2000 {
             self.memory[self.selected as usize][addr as usize] = Some(value);
         } else {
-            panic!("Invalid VRAM edit (address out of bounds): {addr:04X}");
+            panic!("Invalid VRAM edit (address out of bounds): {addr:#06x}");
         }
     }
 
@@ -59,7 +59,7 @@ impl WramBank {
             let addr = addr - 0x1000;
             self.memory[self.selected as usize][addr as usize]
         } else {
-            panic!("Invalid WRAM access (address out of bounds): {addr:04X}");
+            panic!("Invalid WRAM access (address out of bounds): {addr:#06x}");
         }
     }
 
@@ -70,7 +70,7 @@ impl WramBank {
             let addr = addr - 0x1000;
             self.memory[self.selected as usize][addr as usize] = Some(value);
         } else {
-            panic!("Invalid WRAM edit (address out of bounds): {addr:04X}");
+            panic!("Invalid WRAM edit (address out of bounds): {addr:#06x}");
         }
     }
 

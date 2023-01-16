@@ -236,28 +236,16 @@ impl Mmu {
         }
     }
 
-    pub fn get(&self, addr: u16) -> u8 {
+    pub fn get(&self, addr: u16) -> Option<u8> {
         match Self::translate(addr) {
             MmuAddr::Mbc(a) => self.mbc.get(a),
-            MmuAddr::Vram(a) => self
-                .vram
-                .get(a)
-                .expect(&format!("Access of uninitialized VRAM: {addr:04X}")),
-            MmuAddr::Wram(a) => self
-                .wram
-                .get(a)
-                .expect(&format!("Access of uninitialized WRAM: {addr:04X}")),
-            MmuAddr::Oam(a) => {
-                self.oam[a as usize].expect(&format!("Access of uninitialized OAM: {addr:04X}"))
-            }
-            MmuAddr::Unusable => 0,
-            MmuAddr::Io(a) => {
-                self.io[a as usize].expect(&format!("Access of uninitialized IO: {addr:04X}"))
-            }
-            MmuAddr::Hram(a) => {
-                self.hram[a as usize].expect(&format!("Access of uninitialized HRAM: {addr:04X}"))
-            }
-            MmuAddr::Ie => self.ie,
+            MmuAddr::Vram(a) => self.vram.get(a),
+            MmuAddr::Wram(a) => self.wram.get(a),
+            MmuAddr::Oam(a) => self.oam[a as usize],
+            MmuAddr::Unusable => Some(0),
+            MmuAddr::Io(a) => self.io[a as usize],
+            MmuAddr::Hram(a) => self.hram[a as usize],
+            MmuAddr::Ie => Some(self.ie),
         }
     }
 
@@ -345,7 +333,7 @@ mod tests {
         }
 
         for (i, e) in addresses.iter().enumerate() {
-            assert_eq!(memory.get(*e), i as u8);
+            assert_eq!(memory.get(*e), Some(i as u8));
         }
     }
 
@@ -355,7 +343,7 @@ mod tests {
 
         // store 45 in echo ram, make sure it is reflected in wram
         memory.set(0xEEFF, 45);
-        assert_eq!(memory.get(0xCEFF), 45);
+        assert_eq!(memory.get(0xCEFF), Some(45));
     }
 
     #[test]
@@ -364,14 +352,14 @@ mod tests {
 
         // set D800 in bank 1 to 0x10
         memory.set(0xD800, 0x10);
-        assert_eq!(memory.get(0xD800), 0x10);
+        assert_eq!(memory.get(0xD800), Some(0x10));
 
         // switch to bank 2
         memory.set(0xFF70, 2);
-        assert_eq!(memory.get(0xD800), 0);
+        assert_eq!(memory.get(0xD800), None);
 
         // switch back to bank 1
         memory.set(0xFF70, 1);
-        assert_eq!(memory.get(0xD800), 0x10);
+        assert_eq!(memory.get(0xD800), Some(0x10));
     }
 }
