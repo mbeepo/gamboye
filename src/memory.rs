@@ -1,9 +1,11 @@
 use self::{
     bank::{VramBank, WramBank},
+    init::init_io,
     mbc::Mbc,
 };
 
 mod bank;
+mod init;
 pub mod mbc;
 
 #[derive(PartialEq, Eq, Debug)]
@@ -42,149 +44,18 @@ pub struct Mmu {
 
 impl Mmu {
     pub fn new(mbc: Box<dyn Mbc>) -> Self {
-        // io init values from mooneye's test roms (misc/boot_hwio-C)
-        let io: [Option<u8>; 0x80] = [
-            Some(0xFF), // FF00
-            Some(0x00),
-            Some(0x7E),
-            Some(0xFF),
-            None, // FF04
-            Some(0x00),
-            Some(0x00),
-            Some(0xF8),
-            Some(0xFF), // FF08
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF), // FF0C
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xE1),
-            Some(0x80), // FF10
-            Some(0xBF),
-            Some(0xF3),
-            Some(0xFF),
-            Some(0xBF), // FF14
-            Some(0xFF),
-            Some(0x3F),
-            Some(0x00),
-            Some(0xFF), // FF18
-            Some(0xBF),
-            Some(0x7F),
-            Some(0xFF),
-            Some(0x9F), // FF1C
-            Some(0xFF),
-            Some(0xBF),
-            Some(0xFF),
-            Some(0xFF), // FF20
-            Some(0x00),
-            Some(0x00),
-            Some(0xBF),
-            Some(0x77), // FF24
-            Some(0xF3),
-            Some(0xF1),
-            Some(0xFF),
-            Some(0xFF), // FF28
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF),
-            None, // FF2C
-            None,
-            None,
-            None,
-            None, // FF30
-            None,
-            None,
-            None,
-            None, // FF34
-            None,
-            None,
-            None,
-            None, // FF38
-            None,
-            None,
-            None,
-            None, // FF3C
-            None,
-            None,
-            None,
-            None, // FF40
-            None,
-            Some(0x00),
-            Some(0x00),
-            None, // FF44
-            Some(0x00),
-            None,
-            Some(0xFC),
-            None, // FF48
-            None,
-            Some(0x00),
-            Some(0x00),
-            Some(0xFF), // FF4C
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFE),
-            Some(0xFF), // FF50
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF), // FF54
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF), // FF58
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF), // FF5C
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF), // FF60
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF), // FF64
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xC8), // FF68
-            Some(0xFF),
-            Some(0xD0),
-            Some(0xFF),
-            Some(0xFF), // FF6C
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF), // FF70
-            Some(0xFF),
-            Some(0x00),
-            Some(0x00),
-            Some(0xFF), // FF74
-            Some(0x8F),
-            Some(0x00),
-            Some(0x00),
-            Some(0xFF), // FF78
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF), // FF7C
-            Some(0xFF),
-            Some(0xFF),
-            Some(0xFF), // FF7F
-        ];
-
         Self {
             mbc,
             vram: VramBank::new(),
             wram: WramBank::new(),
             oam: [None; 0x9F],
-            io,
+            io: init_io(),
             hram: [None; 0x7E],
             ie: 0,
         }
     }
 
+    /// Translates a global memory address to an internally usable enum variant
     pub(crate) fn translate(addr: u16) -> MmuAddr {
         if addr < 0x8000 {
             // 0000 - 7FFF

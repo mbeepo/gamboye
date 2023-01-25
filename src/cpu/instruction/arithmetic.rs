@@ -11,19 +11,21 @@ impl Cpu {
     /// - The `half carry` flag is set if a bit was carried from bit 3 to bit 4
     /// - The `carry` flag is set if the output wraps around `255` to `0`
     pub fn add(&mut self, value: u8) -> u8 {
-        println!("value: {value}, {value:#010b}");
-
         let (new_value, overflowed) = self.regs.a.overflowing_add(value);
 
-        self.regs.f.zero = new_value == 0;
-        self.regs.f.subtract = false;
-        self.regs.f.half_carry = (self.regs.a & 0xF) + (value & 0xF) & 0x10 == 0x10;
-        self.regs.f.carry = overflowed;
+        self.regs.set_zf(new_value == 0);
+        self.regs.set_nf(false);
+        self.regs
+            .set_hf((self.regs.a & 0xF) + (value & 0xF) & 0x10 == 0x10);
+        self.regs.set_cf(overflowed);
 
         new_value
     }
 
     /// Adds a u8 and the carry flag to register A
+    ///
+    /// ### Input States
+    /// - If the `carry` flag is set, `1` will be added to the value before adding
     ///
     /// ### Flag States
     /// - The `zero` flag is set if the output is `0`
@@ -31,29 +33,13 @@ impl Cpu {
     /// - The `half carry` flag is set if a bit was carried from bit 3 to bit 4
     /// - The `carry` flag is set if the output wraps around `255` to `0`
     pub fn add_carry(&mut self, value: u8) -> u8 {
-        /*
-        let (new_value, overflowed) = self.registers.a.overflowing_add(value);
-        let (new_value, overflowed2) =
-            new_value.overflowing_add((self.registers.f.as_bits() >> 4) & 1);
-
-        self.registers.f.zero = new_value == 0;
-        self.registers.f.subtract = false;
-
-        let half_carry = (self.registers.a & 0xF) + (value & 0xF);
-
-        self.registers.f.half_carry =
-            half_carry > 0xF || half_carry == 0xF && self.registers.f.carry;
-        self.registers.f.carry = overflowed || overflowed2;
-
-        new_value
-        */
         self.add(value + self.regs.get_cf() as u8)
     }
 
     /// Subtracts a u8 from register A
     ///
     /// ### Flag States
-    /// - The `zero` flag is set is the output is `0`
+    /// - The `zero` flag is set if the output is `0`
     /// - The `subtract` flag is set to `1`
     /// - The `half carry` flag is reset to `0`
     /// - The `carry` flag is set if the output wraps around `0` to `255`
@@ -64,26 +50,35 @@ impl Cpu {
         self.regs.set_hf(false);
         self.regs.set_cf((self.regs.a as u16) < (value as u16));
 
-        // From Mooneye's DMG emulator, pretty sure this will never be true but keeping it just in case
+        // From Mooneye's DMG emulator, pretty sure this will never be true but keeping it so I can explain this
         // self.regs.set_hf((self.regs.a & 0xf).wrapping_sub(value & 0xf) & (0x10) != 0);
-
-        println!(
-            "A: {:#08b}\nd: {value:#08b}\nOut: {result:#08b}\nCarry: {}",
-            self.regs.a,
-            self.regs.get_cf()
-        );
 
         result
     }
 
-    // Subtracts a u8 and the carry bit from register A
+    // Subtracts a u8 and the carry flag from register A
+    ///
+    /// ### Input States
+    /// - If the `carry` flag is set, `1` will be added to the input before subtracting
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is set to `1`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is set if the output wraps around `0` to `255`
     pub fn sub_carry(&mut self, value: u8) -> u8 {
-        self.sub(value - self.regs.get_cf() as u8)
+        self.sub(value + self.regs.get_cf() as u8)
     }
 
     // ---------- 16 bit ----------
     /// Adds a u16 to register pair HL. This implementation sets the half carry flag
     /// if bit 3 overflows into bit 4
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is set if bit 3 overflows into bit 4
+    /// - The `carry` flag is set if the output wraps around `65535` to `0`
     pub fn add_hl(&mut self, value: u16) -> u16 {
         let (new_value, overflowed) = self.regs.get_hl().overflowing_add(value);
 
