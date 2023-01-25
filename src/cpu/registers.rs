@@ -15,6 +15,7 @@ impl Flags {
         }
     }
 
+    /// Combines the flags into a byte. The returned byte has the structure 0bZNHC_0000
     pub fn as_bits(&self) -> u8 {
         let mut bits = 0;
 
@@ -65,20 +66,64 @@ impl Registers {
         }
     }
 
+    /// Gets the word stored in the `BC` register pair
     pub fn get_bc(&self) -> u16 {
         ((self.b as u16) << 8) | self.c as u16
     }
 
+    /// Gets the word stored in the `DE` register pair
     pub fn get_de(&self) -> u16 {
         ((self.d as u16) << 8) | self.e as u16
     }
 
+    /// Gets the word stored in the `HL` register pair
     pub fn get_hl(&self) -> u16 {
         ((self.h as u16) << 8) | self.l as u16
     }
 
+    /// Sets the word stored in the `HL` register pair
     pub fn set_hl(&mut self, value: u16) {
         self.h = (value >> 8) as u8;
         self.l = (value & 0xFF) as u8;
+    }
+
+    /// Gets the `zero` flag
+    pub fn get_zf(&self) -> bool {
+        self.f.zero
+    }
+
+    /// Sets the `zero` flag
+    pub fn set_zf(&mut self, value: bool) {
+        self.f.zero = value;
+    }
+
+    /// Gets the `subtract` flag
+    pub fn get_nf(&self) -> bool {
+        self.f.subtract
+    }
+
+    /// Sets the `subtract` flag
+    pub fn set_nf(&mut self, value: bool) {
+        self.f.subtract = value;
+    }
+
+    /// Gets the `half carry` flag
+    pub fn get_hf(&self) -> bool {
+        self.f.half_carry
+    }
+
+    /// Sets the `half carry` flag
+    pub fn set_hf(&mut self, value: bool) {
+        self.f.half_carry = value;
+    }
+
+    /// Gets the `carry` flag
+    pub fn get_cf(&self) -> bool {
+        self.f.carry
+    }
+
+    /// Sets the `carry` flag
+    pub fn set_cf(&mut self, value: bool) {
+        self.f.carry = value;
     }
 }
