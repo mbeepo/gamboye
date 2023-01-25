@@ -20,7 +20,10 @@ impl Cpu {
     /// Executes a single instruction
     pub fn execute(&mut self, instruction: Instruction) {
         match instruction {
-            Instruction::ADD(target) | Instruction::ADC(target) | Instruction::SUB(target) => {
+            Instruction::ADD(target)
+            | Instruction::ADC(target)
+            | Instruction::SUB(target)
+            | Instruction::SBC(target) => {
                 let value = match target {
                     ArithmeticTarget::A => self.regs.a,
                     ArithmeticTarget::B => self.regs.b,
