@@ -1,9 +1,9 @@
 use self::{
-    instruction::{ArithmeticTarget, HLArithmeticTarget, Instruction},
+    instructions::{ArithmeticTarget, HLArithmeticTarget, Instruction},
     registers::Registers,
 };
 
-mod instruction;
+mod instructions;
 mod registers;
 
 pub struct Cpu {
@@ -23,7 +23,8 @@ impl Cpu {
             Instruction::ADD(target)
             | Instruction::ADC(target)
             | Instruction::SUB(target)
-            | Instruction::SBC(target) => {
+            | Instruction::SBC(target)
+            | Instruction::AND(target) => {
                 let value = match target {
                     ArithmeticTarget::A => self.regs.a,
                     ArithmeticTarget::B => self.regs.b,
@@ -39,6 +40,7 @@ impl Cpu {
                     Instruction::ADC(_) => self.add_carry(value),
                     Instruction::SUB(_) => self.sub(value),
                     Instruction::SBC(_) => self.sub_carry(value),
+                    Instruction::AND(_) => self.and(value),
                     _ => unreachable!(),
                 };
 

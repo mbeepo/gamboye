@@ -56,7 +56,7 @@ impl Cpu {
         result
     }
 
-    // Subtracts a u8 and the carry flag from register A
+    /// Subtracts a u8 and the carry flag from register A
     ///
     /// ### Input States
     /// - If the `carry` flag is set, `1` will be added to the input before subtracting
@@ -68,6 +68,24 @@ impl Cpu {
     /// - The `carry` flag is set if the output wraps around `0` to `255`
     pub fn sub_carry(&mut self, value: u8) -> u8 {
         self.sub(value + self.regs.get_cf() as u8)
+    }
+
+    /// ANDs a u8 together with register A
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is set to `1`
+    /// - The `carry` flag is reset to `0`
+    pub fn and(&mut self, value: u8) -> u8 {
+        let out = self.regs.a & value;
+
+        self.regs.set_zf(out == 0);
+        self.regs.set_nf(false);
+        self.regs.set_hf(true);
+        self.regs.set_cf(false);
+
+        out
     }
 
     // ---------- 16 bit ----------
@@ -94,7 +112,7 @@ impl Cpu {
 #[cfg(test)]
 mod tests {
     use crate::cpu::{
-        instruction::HLArithmeticTarget, registers::Registers, ArithmeticTarget, Cpu, Instruction,
+        instructions::HLArithmeticTarget, registers::Registers, ArithmeticTarget, Cpu, Instruction,
     };
 
     impl Registers {
@@ -182,6 +200,30 @@ mod tests {
 
         assert_eq!(cpu.regs.a, 2);
         assert_eq!(cpu.regs.f.as_bits(), 0b0100_0000);
+    }
+
+    #[test]
+    fn and() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 255;
+        cpu.regs.b = 15;
+
+        cpu.execute(Instruction::AND(ArithmeticTarget::B));
+
+        assert_eq!(cpu.regs.a, 0b0000_1111);
+        assert_eq!(cpu.regs.f.as_bits(), 0b0010_0000);
+    }
+
+    #[test]
+    fn and_zero() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 16;
+        cpu.regs.b = 15;
+
+        cpu.execute(Instruction::AND(ArithmeticTarget::B));
+
+        assert_eq!(cpu.regs.a, 0b0000_0);
+        assert_eq!(cpu.regs.f.as_bits(), 0b1010_0000);
     }
 
     #[test]
