@@ -3,7 +3,7 @@ use crate::cpu::Cpu;
 /// CPU instructions in the Arithmetic Group. These implementations set all relevant flags
 impl Cpu {
     // ---------- 8 bit ----------
-    /// Adds a u8 to register A
+    /// Adds two values
     ///
     /// ### Flag States
     /// - The `zero` flag is set if the output is `0`
@@ -11,15 +11,15 @@ impl Cpu {
     /// - The `half carry` flag is set if a bit was carried from bit 3 to bit 4
     /// - The `carry` flag is set if the output wraps around `255` to `0`
     pub fn add(&mut self, value: u8) -> u8 {
-        let (new_value, overflowed) = self.regs.a.overflowing_add(value);
+        let (out, carry) = self.regs.a.overflowing_add(value);
 
-        self.regs.set_zf(new_value == 0);
+        self.regs.set_zf(out == 0);
         self.regs.set_nf(false);
         self.regs
             .set_hf((self.regs.a & 0xF) + (value & 0xF) & 0x10 == 0x10);
-        self.regs.set_cf(overflowed);
+        self.regs.set_cf(carry);
 
-        new_value
+        out
     }
 
     /// Adds a u8 and the carry flag to register A
@@ -44,16 +44,17 @@ impl Cpu {
     /// - The `half carry` flag is reset to `0`
     /// - The `carry` flag is set if the output wraps around `0` to `255`
     pub fn sub(&mut self, value: u8) -> u8 {
-        let result = self.regs.a.wrapping_sub(value);
-        self.regs.set_zf(result == 0);
+        let (out, carry) = self.regs.a.overflowing_sub(value);
+
+        self.regs.set_zf(out == 0);
         self.regs.set_nf(true);
         self.regs.set_hf(false);
-        self.regs.set_cf((self.regs.a as u16) < (value as u16));
+        self.regs.set_cf(carry);
 
         // From Mooneye's DMG emulator, pretty sure this will never be true but keeping it so I can explain this
         // self.regs.set_hf((self.regs.a & 0xf).wrapping_sub(value & 0xf) & (0x10) != 0);
 
-        result
+        out
     }
 
     /// Subtracts a u8 and the carry flag from register A
@@ -124,6 +125,43 @@ impl Cpu {
         out
     }
 
+    /// Increments `value` by 1
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset
+    /// - The `half carry` flag is set if a bit was carried from bit 3 to bit 4
+    /// - The `carry` flag is set if the output wraps around `255` to `0`
+    pub fn inc(&mut self, value: u8) -> u8 {
+        let (out, carry) = value.overflowing_add(1);
+
+        // If a bit was carried out from adding 1, we get 0
+        self.regs.set_zf(carry);
+        self.regs.set_nf(false);
+        self.regs.set_hf((value & 0xF) + 1 & 0x10 == 0x10);
+        self.regs.set_cf(carry);
+
+        out
+    }
+
+    /// Decrements `value` by 1
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is set to `1`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is set if the output wraps around `0` to `255`
+    pub fn dec(&mut self, value: u8) -> u8 {
+        let (out, carry) = value.overflowing_sub(1);
+
+        self.regs.set_zf(out == 0);
+        self.regs.set_nf(true);
+        self.regs.set_hf(false);
+        self.regs.set_cf(carry);
+
+        out
+    }
+
     // ---------- 16 bit ----------
     /// Adds a u16 to register pair HL. This implementation sets the half carry flag
     /// if bit 3 overflows into bit 4
@@ -134,14 +172,14 @@ impl Cpu {
     /// - The `half carry` flag is set if bit 3 overflows into bit 4
     /// - The `carry` flag is set if the output wraps around `65535` to `0`
     pub fn add_hl(&mut self, value: u16) -> u16 {
-        let (new_value, overflowed) = self.regs.get_hl().overflowing_add(value);
+        let (out, overflowed) = self.regs.get_hl().overflowing_add(value);
 
-        self.regs.f.zero = new_value == 0;
+        self.regs.f.zero = out == 0;
         self.regs.f.subtract = false;
         self.regs.f.half_carry = (self.regs.l & 0xF) + (value & 0xF) as u8 & 0x10 == 0x10;
         self.regs.f.carry = overflowed;
 
-        new_value
+        out
     }
 }
 
@@ -179,7 +217,7 @@ mod tests {
         cpu.execute(Instruction::ADD(ArithmeticTarget::C));
 
         assert_eq!(cpu.regs.a, 16);
-        assert_eq!(cpu.regs.f.as_bits(), 0b0010_0000);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0010_0000);
     }
 
     #[test]
@@ -191,7 +229,7 @@ mod tests {
         cpu.execute(Instruction::ADD(ArithmeticTarget::D));
 
         assert_eq!(cpu.regs.a, 0);
-        assert_eq!(cpu.regs.f.as_bits(), 0b1000_0000);
+        assert_eq!(cpu.regs.f.as_byte(), 0b1000_0000);
     }
 
     #[test]
@@ -204,9 +242,9 @@ mod tests {
 
         assert_eq!(cpu.regs.a, 1);
 
-        println!("{:08b}", cpu.regs.f.as_bits());
+        println!("{:08b}", cpu.regs.f.as_byte());
 
-        assert_eq!(cpu.regs.f.as_bits(), 0b0001_0000);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0001_0000);
     }
 
     #[test]
@@ -224,7 +262,7 @@ mod tests {
         cpu.execute(Instruction::ADC(ArithmeticTarget::L));
 
         assert_eq!(cpu.regs.a, 12);
-        assert_eq!(cpu.regs.f.as_bits(), 0);
+        assert_eq!(cpu.regs.f.as_byte(), 0);
     }
 
     #[test]
@@ -236,7 +274,7 @@ mod tests {
         cpu.execute(Instruction::SUB(ArithmeticTarget::B));
 
         assert_eq!(cpu.regs.a, 2);
-        assert_eq!(cpu.regs.f.as_bits(), 0b0100_0000);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0100_0000);
     }
 
     #[test]
@@ -248,7 +286,7 @@ mod tests {
         cpu.execute(Instruction::AND(ArithmeticTarget::B));
 
         assert_eq!(cpu.regs.a, 0b0000_1111);
-        assert_eq!(cpu.regs.f.as_bits(), 0b0010_0000);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0010_0000);
     }
 
     #[test]
@@ -260,7 +298,7 @@ mod tests {
         cpu.execute(Instruction::AND(ArithmeticTarget::B));
 
         assert_eq!(cpu.regs.a, 0);
-        assert_eq!(cpu.regs.f.as_bits(), 0b1010_0000);
+        assert_eq!(cpu.regs.f.as_byte(), 0b1010_0000);
     }
 
     #[test]
@@ -272,7 +310,7 @@ mod tests {
         cpu.execute(Instruction::OR(ArithmeticTarget::B));
 
         assert_eq!(cpu.regs.a, 20);
-        assert_eq!(cpu.regs.f.as_bits(), 0);
+        assert_eq!(cpu.regs.f.as_byte(), 0);
     }
 
     #[test]
@@ -284,7 +322,7 @@ mod tests {
         cpu.execute(Instruction::OR(ArithmeticTarget::B));
 
         assert_eq!(cpu.regs.a, 0);
-        assert_eq!(cpu.regs.f.as_bits(), 0b1000_0000);
+        assert_eq!(cpu.regs.f.as_byte(), 0b1000_0000);
     }
 
     #[test]
@@ -296,7 +334,7 @@ mod tests {
         cpu.execute(Instruction::XOR(ArithmeticTarget::B));
 
         assert_eq!(cpu.regs.a, 15);
-        assert_eq!(cpu.regs.f.as_bits(), 0);
+        assert_eq!(cpu.regs.f.as_byte(), 0);
     }
 
     #[test]
@@ -307,7 +345,51 @@ mod tests {
         cpu.execute(Instruction::XOR(ArithmeticTarget::A));
 
         assert_eq!(cpu.regs.a, 0);
-        assert_eq!(cpu.regs.f.as_bits(), 0b1000_0000);
+        assert_eq!(cpu.regs.f.as_byte(), 0b1000_0000);
+    }
+
+    #[test]
+    fn inc() {
+        let mut cpu = Cpu::new();
+        cpu.regs.b = 34;
+
+        cpu.execute(Instruction::INC(ArithmeticTarget::B));
+
+        assert_eq!(cpu.regs.b, 35);
+        assert_eq!(cpu.regs.f.as_byte(), 0);
+    }
+
+    #[test]
+    fn inc_carry() {
+        let mut cpu = Cpu::new();
+        cpu.regs.b = 255;
+
+        cpu.execute(Instruction::INC(ArithmeticTarget::B));
+
+        assert_eq!(cpu.regs.b, 0);
+        assert_eq!(cpu.regs.f.as_byte(), 0b1011_0000);
+    }
+
+    #[test]
+    fn dec() {
+        let mut cpu = Cpu::new();
+        cpu.regs.d = 34;
+
+        cpu.execute(Instruction::DEC(ArithmeticTarget::D));
+
+        assert_eq!(cpu.regs.d, 33);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0100_0000);
+    }
+
+    #[test]
+    fn dec_carry() {
+        let mut cpu = Cpu::new();
+        cpu.regs.d = 0;
+
+        cpu.execute(Instruction::DEC(ArithmeticTarget::D));
+
+        assert_eq!(cpu.regs.d, 255);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0101_0000);
     }
 
     // ---------- 16 bit ----------
@@ -331,6 +413,6 @@ mod tests {
         cpu.execute(Instruction::ADDHL(HLArithmeticTarget::BC));
 
         assert_eq!(cpu.regs.get_hl(), 16);
-        assert_eq!(cpu.regs.f.as_bits(), 0b0010_0000);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0010_0000);
     }
 }

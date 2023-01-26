@@ -16,7 +16,7 @@ impl Flags {
     }
 
     /// Combines the flags into a byte. The returned byte has the structure 0bZNHC_0000
-    pub fn as_bits(&self) -> u8 {
+    pub fn as_byte(&self) -> u8 {
         let mut bits = 0;
 
         if self.zero {
