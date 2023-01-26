@@ -1,5 +1,8 @@
+/// Returns a new initialized IO memory segment
+///
+/// Some cells are not meant to be initialized at boot, and are set to None
 pub fn init_io() -> [Option<u8>; 0x80] {
-    // initial values from mooneye's test roms (misc/boot_hwio-C.s)
+    // Initial values from mooneye's test roms (misc/boot_hwio-C.s)
     let initial: [u8; 0x80] = [
         0xFF, 0x00, 0x7E, 0xFF, 0x00, 0x00, 0x00, 0xF8, // FF04
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xE1, // FF0C
@@ -20,7 +23,7 @@ pub fn init_io() -> [Option<u8>; 0x80] {
     ];
 
     // 1s are initialized, 0s are uninitialized
-    let init_map: [u32; 4] = [
+    let init_mask: [u32; 4] = [
         0b11110111_11111111_11111111_11111111,
         0b11111111_11111111_00000000_00000000,
         0b00110101_00111111_11111111_11111111,
@@ -29,24 +32,21 @@ pub fn init_io() -> [Option<u8>; 0x80] {
 
     let mut memory: [Option<u8>; 0x80] = [None; 0x80];
 
+    // Go through initial memory, outputting None for bytes with their corresponding bits set to `0`
+    // Do it in 4 groups, since the mask is broken into 4 `u32`s
     for i in 0..4 {
-        let map = init_map[i];
+        let map = init_mask[i];
 
         for bit in 0..32 {
-            let mem_idx = bit + i * 32;
+            // Get the current byte address within IO memory
+            let mem_addr = bit + i * 32;
 
+            // This translates the bit index (0-32) to a mask, starting from the left side (MSB)
             if map & (1 << 31 - bit) > 0 {
-                memory[mem_idx] = Some(initial[mem_idx]);
+                memory[mem_addr] = Some(initial[mem_addr]);
             } else {
-                memory[mem_idx] = None;
+                memory[mem_addr] = None;
             }
-        }
-    }
-
-    for i in memory[64..72].iter() {
-        match i {
-            Some(e) => println!("{e:#04X}"),
-            None => println!("None --"),
         }
     }
 

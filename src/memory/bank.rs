@@ -17,6 +17,14 @@ impl VramBank {
         }
     }
 
+    /// Gets the byte stored in VRAM at the internal address `addr`
+    ///
+    /// ### Return Variants
+    /// - Returns `Some(u8)` if the selected cell is initialized
+    /// - Returns `None` if the selected cell is uninitialized
+    ///
+    /// ### Panic Conditions
+    /// This method will panic if `addr` is outside of the bounds `0x0000 - 0x1FFF`
     pub fn get(&self, addr: u16) -> Option<u8> {
         if addr < 0x2000 {
             self.memory[self.selected as usize][addr as usize]
@@ -25,6 +33,10 @@ impl VramBank {
         }
     }
 
+    /// Sets the cell in VRAM at the internal address `addr` to `value`
+    ///
+    /// ### Panic Conditions
+    /// This method will panic if `addr` is outside of the bounds `0x0000 - 0x1FFF`
     pub fn set(&mut self, addr: u16, value: u8) {
         if addr < 0x2000 {
             self.memory[self.selected as usize][addr as usize] = Some(value);
@@ -33,6 +45,10 @@ impl VramBank {
         }
     }
 
+    /// Selects the bank to be used when performing `Self::get()` and `Self::set()` operations
+    ///
+    /// ### Panic Conditions
+    /// This method will panic if `bank` is not `0` or `1`
     pub fn select(&mut self, bank: u8) {
         if bank > 1 {
             // only banks 0 and 1 are valid
@@ -52,6 +68,14 @@ impl WramBank {
         }
     }
 
+    /// Gets the byte stored in WRAM at the internal address `addr`
+    ///
+    /// ### Return Variants
+    /// - Returns `Some(u8)` if the selected cell is initialized
+    /// - Returns `None` if the selected cell is uninitialized
+    ///
+    /// ### Panic Conditions
+    /// This method will panic if `addr` is outside of the bounds `0x0000 - 0x1FFF`
     pub fn get(&self, addr: u16) -> Option<u8> {
         if addr < 0x1000 {
             self.main[addr as usize]
@@ -63,6 +87,10 @@ impl WramBank {
         }
     }
 
+    /// Sets the cell in WRAM at the internal address `addr` to `value`
+    ///
+    /// ### Panic Conditions
+    /// This method will panic if `addr` is outside of the bounds `0x0000 - 0x1FFF`
     pub fn set(&mut self, addr: u16, value: u8) {
         if addr < 0x1000 {
             self.main[addr as usize] = Some(value);
@@ -74,6 +102,10 @@ impl WramBank {
         }
     }
 
+    /// Selects the bank to be used when performing `Self::get()` and `Self::set()` operations
+    ///
+    /// ### Panic Conditions
+    /// This method will panic if `bank` is outside of the bounds `0 - 7`
     pub fn select(&mut self, bank: u8) {
         if bank > 7 {
             panic!("Invalid WRAM bank selected: {bank}");

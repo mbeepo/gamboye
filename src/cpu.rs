@@ -24,7 +24,9 @@ impl Cpu {
             | Instruction::ADC(target)
             | Instruction::SUB(target)
             | Instruction::SBC(target)
-            | Instruction::AND(target) => {
+            | Instruction::AND(target)
+            | Instruction::OR(target)
+            | Instruction::XOR(target) => {
                 let value = match target {
                     ArithmeticTarget::A => self.regs.a,
                     ArithmeticTarget::B => self.regs.b,
@@ -41,6 +43,8 @@ impl Cpu {
                     Instruction::SUB(_) => self.sub(value),
                     Instruction::SBC(_) => self.sub_carry(value),
                     Instruction::AND(_) => self.and(value),
+                    Instruction::OR(_) => self.or(value),
+                    Instruction::XOR(_) => self.xor(value),
                     _ => unreachable!(),
                 };
 

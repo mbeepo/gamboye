@@ -88,6 +88,42 @@ impl Cpu {
         out
     }
 
+    /// ORs a u8 together with register A
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is reset to `0`
+    pub fn or(&mut self, value: u8) -> u8 {
+        let out = self.regs.a | value;
+
+        self.regs.set_zf(out == 0);
+        self.regs.set_nf(false);
+        self.regs.set_hf(false);
+        self.regs.set_cf(false);
+
+        out
+    }
+
+    /// XORs a u8 together with register A
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is reset to `0`
+    pub fn xor(&mut self, value: u8) -> u8 {
+        let out = self.regs.a ^ value;
+
+        self.regs.set_zf(out == 0);
+        self.regs.set_nf(false);
+        self.regs.set_hf(false);
+        self.regs.set_cf(false);
+
+        out
+    }
+
     // ---------- 16 bit ----------
     /// Adds a u16 to register pair HL. This implementation sets the half carry flag
     /// if bit 3 overflows into bit 4
@@ -122,6 +158,7 @@ mod tests {
         }
     }
 
+    // ---------- 8 bit ----------
     #[test]
     fn add_small() {
         let mut cpu = Cpu::new();
@@ -222,10 +259,58 @@ mod tests {
 
         cpu.execute(Instruction::AND(ArithmeticTarget::B));
 
-        assert_eq!(cpu.regs.a, 0b0000_0);
+        assert_eq!(cpu.regs.a, 0);
         assert_eq!(cpu.regs.f.as_bits(), 0b1010_0000);
     }
 
+    #[test]
+    fn or() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 16;
+        cpu.regs.b = 4;
+
+        cpu.execute(Instruction::OR(ArithmeticTarget::B));
+
+        assert_eq!(cpu.regs.a, 20);
+        assert_eq!(cpu.regs.f.as_bits(), 0);
+    }
+
+    #[test]
+    fn or_zero() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0;
+        cpu.regs.b = 0;
+
+        cpu.execute(Instruction::OR(ArithmeticTarget::B));
+
+        assert_eq!(cpu.regs.a, 0);
+        assert_eq!(cpu.regs.f.as_bits(), 0b1000_0000);
+    }
+
+    #[test]
+    fn xor() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 16;
+        cpu.regs.b = 31;
+
+        cpu.execute(Instruction::XOR(ArithmeticTarget::B));
+
+        assert_eq!(cpu.regs.a, 15);
+        assert_eq!(cpu.regs.f.as_bits(), 0);
+    }
+
+    #[test]
+    fn xor_zero() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 238;
+
+        cpu.execute(Instruction::XOR(ArithmeticTarget::A));
+
+        assert_eq!(cpu.regs.a, 0);
+        assert_eq!(cpu.regs.f.as_bits(), 0b1000_0000);
+    }
+
+    // ---------- 16 bit ----------
     #[test]
     fn add_hl() {
         let mut cpu = Cpu::new();

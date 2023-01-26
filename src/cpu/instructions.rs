@@ -7,6 +7,8 @@ pub enum Instruction {
     SUB(ArithmeticTarget),
     SBC(ArithmeticTarget),
     AND(ArithmeticTarget),
+    OR(ArithmeticTarget),
+    XOR(ArithmeticTarget),
     ADDHL(HLArithmeticTarget),
 }
 

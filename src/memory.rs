@@ -14,13 +14,15 @@ pub(crate) enum MmuAddr {
     Vram(u16),
     Wram(u16),
     Oam(u16),
-    Unusable,
+    Prohibited,
     Io(u16),
     Hram(u16),
     Ie,
 }
 
 /// Memory management unit
+///
+/// The main interfaces of this structure are `Mmu::get()` and `Mmu::set()`
 pub struct Mmu {
     // 0000 - 7FFF
     // A000 - BFFF
@@ -89,7 +91,7 @@ impl Mmu {
         } else if addr < 0xFEFF {
             // FEA0 - FEFF
             // unusable
-            MmuAddr::Unusable
+            MmuAddr::Prohibited
         } else if addr < 0xFF80 {
             // FF00 - FF7F
             // MMIO
@@ -107,26 +109,40 @@ impl Mmu {
         }
     }
 
+    /// Attempts to retrieve a byte of data from memory at the address `addr`
+    ///
+    /// ### Return Variants
+    /// - Returns `Some(u8)` if the selected cell is initialized
+    /// - Returns `None` if the selected cell is uninitialized. It is up to the executor to decide what to do with this
     pub fn get(&self, addr: u16) -> Option<u8> {
         match Self::translate(addr) {
             MmuAddr::Mbc(a) => self.mbc.get(a),
             MmuAddr::Vram(a) => self.vram.get(a),
             MmuAddr::Wram(a) => self.wram.get(a),
             MmuAddr::Oam(a) => self.oam[a as usize],
-            MmuAddr::Unusable => Some(0),
+            // On CGB revision E, reading from this segment returns the high nibble of the lower address byte twice
+            MmuAddr::Prohibited => {
+                let nibble = (addr & 0x00F0) as u8;
+                Some(nibble | nibble >> 4)
+            }
             MmuAddr::Io(a) => self.io[a as usize],
             MmuAddr::Hram(a) => self.hram[a as usize],
             MmuAddr::Ie => Some(self.ie),
         }
     }
 
+    /// Sets the cell at address `addr` to the value stored in `value`
+    ///
+    /// ### Side Effects
+    /// This method may have internal side effects, as listed below:
+    /// - If `addr` == `0xFF70`, the selected WRAM bank will be changed using the new value
     pub fn set(&mut self, addr: u16, value: u8) {
         match Self::translate(addr) {
             MmuAddr::Mbc(a) => self.mbc.set(a, value),
             MmuAddr::Vram(a) => self.vram.set(a, value),
             MmuAddr::Wram(a) => self.wram.set(a, value),
             MmuAddr::Oam(a) => self.oam[a as usize] = Some(value),
-            MmuAddr::Unusable => {}
+            MmuAddr::Prohibited => {}
             MmuAddr::Io(a) => {
                 if addr == 0xFF70 {
                     // WRAM Bank Select
@@ -232,5 +248,15 @@ mod tests {
         // switch back to bank 1
         memory.set(0xFF70, 1);
         assert_eq!(memory.get(0xD800), Some(0x10));
+    }
+
+    #[test]
+    fn prohibited() {
+        let mut memory = init();
+
+        // should do nothing
+        memory.set(0xFEC8, 10);
+
+        assert_eq!(memory.get(0xFEC8), Some(0xCC));
     }
 }
