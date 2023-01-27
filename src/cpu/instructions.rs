@@ -1,4 +1,5 @@
 mod arithmetic;
+mod bitwise;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Instruction {
@@ -31,9 +32,17 @@ pub enum Instruction {
     RRA,
     /// Rotates A left, wrapping with the carry flag
     RLA,
+    /// Rotates A right, putting bit 0 in both the carry flag and bit 7
+    RRCA,
+    /// Rotates A left, putting bit 7 in both the carry flag and bit 0
+    RLCA,
+    /// Flip every bit of A
+    CPL,
     // ---------- 16 bit ----------
     /// Adds target to HL and stores the result in HL
     ADDHL(HLArithmeticTarget),
+    /// Checks if the selected bit is set
+    BIT(ArithmeticTarget, u8),
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -1,5 +1,8 @@
 use gbc::Gbc;
 
 fn main() {
-    let gbc = Gbc::new();
+    let e = 0b1010_1010;
+    let r: u8 = e << 1;
+
+    println!("{e:#010b}\n{r:#010b}");
 }

@@ -1,3 +1,4 @@
+/// Flag register state
 pub struct Flags {
     pub zero: bool,
     pub subtract: bool,
