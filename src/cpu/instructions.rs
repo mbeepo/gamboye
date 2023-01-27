@@ -38,11 +38,15 @@ pub enum Instruction {
     RLCA,
     /// Flip every bit of A
     CPL,
+    /// Checks if the selected bit is set
+    BIT(ArithmeticTarget, u8),
+    /// Reset the selected bit to 0
+    RES(ArithmeticTarget, u8),
+    /// Set the selected bit to 1
+    SET(ArithmeticTarget, u8),
     // ---------- 16 bit ----------
     /// Adds target to HL and stores the result in HL
     ADDHL(HLArithmeticTarget),
-    /// Checks if the selected bit is set
-    BIT(ArithmeticTarget, u8),
 }
 
 #[derive(Clone, Copy, Debug)]

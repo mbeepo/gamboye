@@ -82,15 +82,17 @@ impl Cpu {
                     _ => unreachable!(),
                 };
 
-                match target {
-                    ArithmeticTarget::A => self.regs.a = out,
-                    ArithmeticTarget::B => self.regs.b = out,
-                    ArithmeticTarget::C => self.regs.c = out,
-                    ArithmeticTarget::D => self.regs.d = out,
-                    ArithmeticTarget::E => self.regs.e = out,
-                    ArithmeticTarget::H => self.regs.h = out,
-                    ArithmeticTarget::L => self.regs.l = out,
+                let reg = match target {
+                    ArithmeticTarget::A => &mut self.regs.a,
+                    ArithmeticTarget::B => &mut self.regs.b,
+                    ArithmeticTarget::C => &mut self.regs.c,
+                    ArithmeticTarget::D => &mut self.regs.d,
+                    ArithmeticTarget::E => &mut self.regs.e,
+                    ArithmeticTarget::H => &mut self.regs.h,
+                    ArithmeticTarget::L => &mut self.regs.l,
                 };
+
+                *reg = out;
             }
             Instruction::CCF => self.ccf(),
             Instruction::SCF => self.scf(),
@@ -123,6 +125,36 @@ impl Cpu {
 
                 self.bit(byte, bit);
             }
+            Instruction::RES(target, bit) | Instruction::SET(target, bit) => {
+                let byte = match target {
+                    ArithmeticTarget::A => self.regs.a,
+                    ArithmeticTarget::B => self.regs.b,
+                    ArithmeticTarget::C => self.regs.c,
+                    ArithmeticTarget::D => self.regs.d,
+                    ArithmeticTarget::E => self.regs.e,
+                    ArithmeticTarget::H => self.regs.h,
+                    ArithmeticTarget::L => self.regs.l,
+                };
+
+                let out = match instruction {
+                    Instruction::RES(_, _) => self.res(byte, bit),
+                    Instruction::SET(_, _) => self.set(byte, bit),
+                    _ => unreachable!(),
+                };
+
+                let reg = match target {
+                    ArithmeticTarget::A => &mut self.regs.a,
+                    ArithmeticTarget::B => &mut self.regs.b,
+                    ArithmeticTarget::C => &mut self.regs.c,
+                    ArithmeticTarget::D => &mut self.regs.d,
+                    ArithmeticTarget::E => &mut self.regs.e,
+                    ArithmeticTarget::H => &mut self.regs.h,
+                    ArithmeticTarget::L => &mut self.regs.l,
+                };
+
+                *reg = out;
+            }
+
             _ => todo!(),
         }
     }

@@ -117,40 +117,60 @@ impl Cpu {
         self.regs.set_hf(true);
     }
 
+    /// Sets the `zero` flag to whether the selected bit is a `0`
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set to the inverse of the selected bit
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag
     pub(crate) fn bit(&mut self, byte: u8, idx: u8) {
         if idx > 7 {
-            panic!("[BIT] Bit target `{idx}` out of range")
+            panic!("[BIT] Bit target `{idx}` out of range");
         }
 
         self.regs.set_zf((byte & (1 << idx)) == 0);
         self.regs.set_nf(false);
         self.regs.set_hf(true);
     }
+
+    pub(crate) fn res(&self, byte: u8, idx: u8) -> u8 {
+        if idx > 7 {
+            panic!("[RES] Bit target `{idx} out of range");
+        }
+
+        byte & !(1 << idx)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::cpu::{instructions::Instruction, Cpu};
+    use crate::cpu::{
+        instructions::{ArithmeticTarget, Instruction},
+        Cpu,
+    };
 
     #[test]
     fn ccf() {
         let mut cpu = Cpu::new();
-        assert_eq!(cpu.regs.get_cf(), false);
+        assert_eq!(cpu.regs.f.as_byte(), 0b1000_0000);
 
         cpu.execute(Instruction::CCF);
-        assert_eq!(cpu.regs.get_cf(), true);
+        assert_eq!(cpu.regs.f.as_byte(), 0b1001_0000);
 
         cpu.execute(Instruction::CCF);
-        assert_eq!(cpu.regs.get_cf(), false);
+        assert_eq!(cpu.regs.f.as_byte(), 0b1000_0000);
     }
 
     #[test]
     fn scf() {
         let mut cpu = Cpu::new();
-        assert_eq!(cpu.regs.get_cf(), false);
+        assert_eq!(cpu.regs.f.as_byte(), 0b1000_0000);
 
         cpu.execute(Instruction::SCF);
-        assert_eq!(cpu.regs.get_cf(), true);
+        assert_eq!(cpu.regs.f.as_byte(), 0b1001_0000);
+
+        cpu.execute(Instruction::SCF);
+        assert_eq!(cpu.regs.f.as_byte(), 0b1001_0000);
     }
 
     #[test]
@@ -218,5 +238,29 @@ mod tests {
         assert_eq!(cpu.regs.a, 0b0101_1010);
         // ZF is initialized as 1, and CPL doesn't affect it, so it should be 1 here
         assert_eq!(cpu.regs.f.as_byte(), 0b1110_0000);
+    }
+
+    #[test]
+    fn bit() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0b1001_0110;
+
+        cpu.execute(Instruction::BIT(ArithmeticTarget::A, 7));
+        assert_eq!(cpu.regs.a, 0b1001_0110);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0010_0000);
+
+        cpu.execute(Instruction::BIT(ArithmeticTarget::A, 3));
+        assert_eq!(cpu.regs.a, 0b1001_0110);
+        assert_eq!(cpu.regs.f.as_byte(), 0b1010_0000);
+    }
+
+    #[test]
+    fn res() {
+        let mut cpu = Cpu::new();
+        cpu.regs.a = 0b1001_0110;
+
+        cpu.execute(Instruction::RES(ArithmeticTarget::A, 7));
+        assert_eq!(cpu.regs.a, 0b0001_0110);
+        assert_eq!(cpu.regs.f.as_byte(), 0b1000_0000);
     }
 }

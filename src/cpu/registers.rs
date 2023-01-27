@@ -7,6 +7,7 @@ pub struct Flags {
 }
 
 impl Flags {
+    /// Creates a new instance with a beginning state of 0b1000_0000
     pub fn new() -> Self {
         Self {
             zero: true,
