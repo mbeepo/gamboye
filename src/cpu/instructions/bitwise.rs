@@ -33,7 +33,7 @@ impl Cpu {
     /// - The `zero` flag is reset to `0`
     /// - The `subtract` flag is reset to `0`
     /// - The `half carry` flag is reset to `0`
-    /// - The `carry` flag is set to the previous value of the rightmost bit of A
+    /// - The `carry` flag is set to the previous value of bit 0
     pub(crate) fn rra(&mut self) {
         let carry = self.regs.a & 1 > 0;
 
@@ -52,7 +52,7 @@ impl Cpu {
     /// - The `zero` flag is reset to `0`
     /// - The `subtract` flag is reset to `0`
     /// - The `half carry` flag is reset to `0`
-    /// - The `carry` flag is set to the previous value of the leftmost bit of A
+    /// - The `carry` flag is set to the previous value of bit 7
     pub(crate) fn rla(&mut self) {
         let carry = self.regs.a & (1 << 7) > 0;
 
@@ -71,7 +71,7 @@ impl Cpu {
     /// - The `zero` flag is reset to `0`
     /// - The `subtract` flag is reset to `0`
     /// - The `half carry` flag is reset to `0`
-    /// - The `carry` flag is set to the previous value of the rightmost bit of A
+    /// - The `carry` flag is set to the previous value of bit 0
     pub(crate) fn rrca(&mut self) {
         let carry = self.regs.a & 1;
 
@@ -90,7 +90,7 @@ impl Cpu {
     /// - The `zero` flag is reset to `0`
     /// - The `subtract` flag is reset to `0`
     /// - The `half carry` flag is reset to `0`
-    /// - The `carry` flag is set to the previous value of the rightmost bit of A
+    /// - The `carry` flag is set to the previous value of bit 7
     pub(crate) fn rlca(&mut self) {
         let carry = self.regs.a & (1 << 7) > 0;
 
@@ -155,7 +155,26 @@ impl Cpu {
             panic!("[SET] Bit target `{idx}` out of range");
         }
 
-        byte & (1 << idx)
+        byte | (1 << idx)
+    }
+
+    /// Shifts the selected byte right, putting bit 0 in the carry flag and resetting bit 7 to `0`
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is set to the previous value of bit 0
+    pub(crate) fn rsl(&mut self, value: u8) -> u8 {
+        let carry = value & 1 > 0;
+        let out = value >> 1;
+
+        self.regs.set_zf(out == 0);
+        self.regs.set_nf(false);
+        self.regs.set_hf(false);
+        self.regs.set_cf(carry);
+
+        out
     }
 }
 
@@ -290,6 +309,16 @@ mod tests {
 
         cpu.execute(Instruction::RES(ArithmeticTarget::A, 7));
         assert_eq!(cpu.regs.a, 0b0001_0110);
+        assert_eq!(cpu.regs.f.as_byte(), 0b1000_0000);
+    }
+
+    #[test]
+    fn set() {
+        let mut cpu = init();
+        cpu.regs.a = 0b1001_0110;
+
+        cpu.execute(Instruction::SET(ArithmeticTarget::A, 3));
+        assert_eq!(cpu.regs.a, 0b1001_1110);
         assert_eq!(cpu.regs.f.as_byte(), 0b1000_0000);
     }
 }

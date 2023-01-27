@@ -163,8 +163,7 @@ impl Cpu {
     }
 
     // ---------- 16 bit ----------
-    /// Adds a u16 to register pair HL. This implementation sets the half carry flag
-    /// if bit 3 overflows into bit 4
+    /// Adds a u16 to register pair HL
     ///
     /// ### Flag States
     /// - The `zero` flag is set if the output is `0`
