@@ -1,20 +1,17 @@
 use crate::{
     cpu::Cpu,
-    memory::{mbc::NoMbc, Mmu},
+    memory::{mbc::MbcKind, Mmu},
 };
 
 pub struct Gbc {
     cpu: Cpu,
-    memory: Mmu,
 }
 
 impl Gbc {
     pub fn new() -> Self {
-        let cpu = Cpu::new();
+        let memory = Mmu::new(MbcKind::NoMbc);
+        let cpu = Cpu::new(memory);
 
-        let mbc = Box::new(NoMbc::new());
-        let memory = Mmu::new(mbc);
-
-        Self { cpu, memory }
+        Self { cpu }
     }
 }

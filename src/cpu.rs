@@ -10,12 +10,14 @@ mod registers;
 
 pub struct Cpu {
     regs: Registers,
+    memory: Mmu,
 }
 
 impl Cpu {
-    pub fn new() -> Self {
+    pub fn new(memory: Mmu) -> Self {
         Self {
             regs: Registers::new(),
+            memory,
         }
     }
 

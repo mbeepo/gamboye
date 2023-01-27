@@ -1,14 +1,14 @@
 use self::{
     bank::{VramBank, WramBank},
     init::init_io,
-    mbc::Mbc,
+    mbc::{Mbc, MbcKind, MbcLike, NoMbc},
 };
 
 mod bank;
 mod init;
 pub mod mbc;
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub(crate) enum MmuAddr {
     Mbc(u16),
     Vram(u16),
@@ -23,10 +23,11 @@ pub(crate) enum MmuAddr {
 /// Memory management unit
 ///
 /// The main interfaces of this structure are `Mmu::get()` and `Mmu::set()`
+#[derive(Clone, Copy)]
 pub struct Mmu {
     // 0000 - 7FFF
     // A000 - BFFF
-    mbc: Box<dyn Mbc>, // memory bank controller, for external switchable memory banks
+    mbc: Mbc, // memory bank controller, for external switchable memory banks
     // 8000 - 9FFF
     vram: VramBank, // video ram banks, only the first will be used for dmg, but either can be used for cgb
     // C000 - CFFF
@@ -45,7 +46,11 @@ pub struct Mmu {
 }
 
 impl Mmu {
-    pub fn new(mbc: Box<dyn Mbc>) -> Self {
+    pub fn new(mbc_kind: MbcKind) -> Self {
+        let mbc = match mbc_kind {
+            MbcKind::NoMbc => Mbc::NoMbc(NoMbc::new()),
+        };
+
         Self {
             mbc,
             vram: VramBank::new(),
@@ -159,15 +164,17 @@ impl Mmu {
 
 #[cfg(test)]
 mod tests {
-    use super::{mbc::NoMbc, Mmu, MmuAddr};
+    use super::{
+        mbc::{MbcKind, NoMbc},
+        Mmu, MmuAddr,
+    };
 
-    fn init() -> Mmu {
-        let mbc = Box::new(NoMbc::new());
-        Mmu::new(mbc)
+    fn init_nombc() -> Mmu {
+        Mmu::new(MbcKind::NoMbc)
     }
 
     #[test]
-    fn translate_mbc() {
+    fn translate_nombc() {
         assert_eq!(Mmu::translate(0x5000), MmuAddr::Mbc(0x5000));
         assert_eq!(Mmu::translate(0xA800), MmuAddr::Mbc(0xA800));
     }
@@ -210,7 +217,7 @@ mod tests {
 
     #[test]
     fn set_get() {
-        let mut memory = init();
+        let mut memory = init_nombc();
         let addresses: &[u16] = &[
             0x5000, 0xA800, 0x9000, 0xC800, 0xD800, 0xFE48, 0xFF38, 0xFFA8, 0xFFFF,
         ];
@@ -226,7 +233,7 @@ mod tests {
 
     #[test]
     fn echo_ram() {
-        let mut memory = init();
+        let mut memory = init_nombc();
 
         // store 45 in echo ram, make sure it is reflected in wram
         memory.set(0xEEFF, 45);
@@ -235,7 +242,7 @@ mod tests {
 
     #[test]
     fn wram_banks() {
-        let mut memory = init();
+        let mut memory = init_nombc();
 
         // set D800 in bank 1 to 0x10
         memory.set(0xD800, 0x10);
@@ -252,7 +259,7 @@ mod tests {
 
     #[test]
     fn prohibited() {
-        let mut memory = init();
+        let mut memory = init_nombc();
 
         // should do nothing
         memory.set(0xFEC8, 10);

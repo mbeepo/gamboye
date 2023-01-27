@@ -1,4 +1,4 @@
-use crate::cpu::Cpu;
+use crate::{cpu::Cpu, memory::mbc::Mbc};
 
 impl Cpu {
     /// Flips the carry flag
@@ -117,12 +117,13 @@ impl Cpu {
         self.regs.set_hf(true);
     }
 
-    /// Sets the `zero` flag to whether the selected bit is a `0`
+    /// Sets the `zero` flag to whether the selected bit is `0`
     ///
     /// ### Flag States
     /// - The `zero` flag is set to the inverse of the selected bit
     /// - The `subtract` flag is reset to `0`
-    /// - The `half carry` flag
+    /// - The `half carry` flag is set to `1`
+    /// - The `carry` flag is unaffected
     pub(crate) fn bit(&mut self, byte: u8, idx: u8) {
         if idx > 7 {
             panic!("[BIT] Bit target `{idx}` out of range");
@@ -133,25 +134,53 @@ impl Cpu {
         self.regs.set_hf(true);
     }
 
+    /// Resets the selected bit to `0`
+    ///
+    /// ### Flag States
+    /// - No flags are affected
     pub(crate) fn res(&self, byte: u8, idx: u8) -> u8 {
         if idx > 7 {
-            panic!("[RES] Bit target `{idx} out of range");
+            panic!("[RES] Bit target `{idx}` out of range");
         }
 
         byte & !(1 << idx)
+    }
+
+    /// Sets the selected bit to `1`
+    ///
+    /// ### Flag States
+    /// - No flags are affected
+    pub(crate) fn set(&self, byte: u8, idx: u8) -> u8 {
+        if idx > 7 {
+            panic!("[SET] Bit target `{idx}` out of range");
+        }
+
+        byte & (1 << idx)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::cpu::{
-        instructions::{ArithmeticTarget, Instruction},
-        Cpu,
+    use crate::{
+        cpu::{
+            instructions::{ArithmeticTarget, Instruction},
+            Cpu,
+        },
+        memory::{
+            mbc::{MbcKind, NoMbc},
+            Mmu,
+        },
     };
+
+    fn init() -> Cpu {
+        let mmu = Mmu::new(MbcKind::NoMbc);
+
+        Cpu::new(mmu)
+    }
 
     #[test]
     fn ccf() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         assert_eq!(cpu.regs.f.as_byte(), 0b1000_0000);
 
         cpu.execute(Instruction::CCF);
@@ -163,7 +192,7 @@ mod tests {
 
     #[test]
     fn scf() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         assert_eq!(cpu.regs.f.as_byte(), 0b1000_0000);
 
         cpu.execute(Instruction::SCF);
@@ -175,7 +204,7 @@ mod tests {
 
     #[test]
     fn rra() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 0b0000_1101;
 
         cpu.execute(Instruction::RRA);
@@ -189,7 +218,7 @@ mod tests {
 
     #[test]
     fn rla() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 0b1011_0000;
 
         cpu.execute(Instruction::RLA);
@@ -203,7 +232,7 @@ mod tests {
 
     #[test]
     fn rrca() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 0b0000_1101;
 
         cpu.execute(Instruction::RRCA);
@@ -217,7 +246,7 @@ mod tests {
 
     #[test]
     fn rlca() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 0b1011_0000;
 
         cpu.execute(Instruction::RLCA);
@@ -231,7 +260,7 @@ mod tests {
 
     #[test]
     fn cpl() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 0b1010_0101;
 
         cpu.execute(Instruction::CPL);
@@ -242,7 +271,7 @@ mod tests {
 
     #[test]
     fn bit() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 0b1001_0110;
 
         cpu.execute(Instruction::BIT(ArithmeticTarget::A, 7));
@@ -256,7 +285,7 @@ mod tests {
 
     #[test]
     fn res() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 0b1001_0110;
 
         cpu.execute(Instruction::RES(ArithmeticTarget::A, 7));

@@ -1,4 +1,4 @@
-use crate::cpu::Cpu;
+use crate::{cpu::Cpu, memory::mbc::Mbc};
 
 /// CPU instructions in the Arithmetic Group. These implementations set all relevant flags
 impl Cpu {
@@ -185,8 +185,15 @@ impl Cpu {
 
 #[cfg(test)]
 mod tests {
-    use crate::cpu::{
-        instructions::HLArithmeticTarget, registers::Registers, ArithmeticTarget, Cpu, Instruction,
+    use crate::{
+        cpu::{
+            instructions::HLArithmeticTarget, registers::Registers, ArithmeticTarget, Cpu,
+            Instruction,
+        },
+        memory::{
+            mbc::{MbcKind, NoMbc},
+            Mmu,
+        },
     };
 
     impl Registers {
@@ -196,10 +203,16 @@ mod tests {
         }
     }
 
+    fn init() -> Cpu {
+        let mmu = Mmu::new(MbcKind::NoMbc);
+
+        Cpu::new(mmu)
+    }
+
     // ---------- 8 bit ----------
     #[test]
     fn add_small() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 2;
         cpu.regs.b = 8;
 
@@ -210,7 +223,7 @@ mod tests {
 
     #[test]
     fn add_half_carry() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 8;
         cpu.regs.c = 8;
 
@@ -222,7 +235,7 @@ mod tests {
 
     #[test]
     fn add_zero() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 0;
         cpu.regs.d = 0;
 
@@ -234,7 +247,7 @@ mod tests {
 
     #[test]
     fn add_carry() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 128;
         cpu.regs.e = 129;
 
@@ -249,7 +262,7 @@ mod tests {
 
     #[test]
     fn adc_with_carry() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 128;
         cpu.regs.h = 129;
         cpu.regs.l = 10;
@@ -267,7 +280,7 @@ mod tests {
 
     #[test]
     fn sub() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 10;
         cpu.regs.b = 8;
 
@@ -279,7 +292,7 @@ mod tests {
 
     #[test]
     fn and() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 255;
         cpu.regs.b = 15;
 
@@ -291,7 +304,7 @@ mod tests {
 
     #[test]
     fn and_zero() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 16;
         cpu.regs.b = 15;
 
@@ -303,7 +316,7 @@ mod tests {
 
     #[test]
     fn or() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 16;
         cpu.regs.b = 4;
 
@@ -315,7 +328,7 @@ mod tests {
 
     #[test]
     fn or_zero() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 0;
         cpu.regs.b = 0;
 
@@ -327,7 +340,7 @@ mod tests {
 
     #[test]
     fn xor() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 16;
         cpu.regs.b = 31;
 
@@ -339,7 +352,7 @@ mod tests {
 
     #[test]
     fn xor_zero() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.a = 238;
 
         cpu.execute(Instruction::XOR(ArithmeticTarget::A));
@@ -350,7 +363,7 @@ mod tests {
 
     #[test]
     fn inc() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.b = 34;
 
         cpu.execute(Instruction::INC(ArithmeticTarget::B));
@@ -361,7 +374,7 @@ mod tests {
 
     #[test]
     fn inc_carry() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.b = 255;
 
         cpu.execute(Instruction::INC(ArithmeticTarget::B));
@@ -372,7 +385,7 @@ mod tests {
 
     #[test]
     fn dec() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.d = 34;
 
         cpu.execute(Instruction::DEC(ArithmeticTarget::D));
@@ -383,7 +396,7 @@ mod tests {
 
     #[test]
     fn dec_carry() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.d = 0;
 
         cpu.execute(Instruction::DEC(ArithmeticTarget::D));
@@ -395,7 +408,7 @@ mod tests {
     // ---------- 16 bit ----------
     #[test]
     fn add_hl() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.set_hl(10_000);
         cpu.regs.set_bc(5000);
 
@@ -406,7 +419,7 @@ mod tests {
 
     #[test]
     fn add_hl_half_carry() {
-        let mut cpu = Cpu::new();
+        let mut cpu = init();
         cpu.regs.set_hl(8);
         cpu.regs.set_bc(8);
 

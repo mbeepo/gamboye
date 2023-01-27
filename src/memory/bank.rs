@@ -1,8 +1,10 @@
+#[derive(Clone, Copy)]
 pub struct VramBank {
     memory: [[Option<u8>; 0x2000]; 2],
     selected: u8,
 }
 
+#[derive(Clone, Copy)]
 pub struct WramBank {
     main: [Option<u8>; 0x1000],
     memory: [[Option<u8>; 0x1000]; 7],

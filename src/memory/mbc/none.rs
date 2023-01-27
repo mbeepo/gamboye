@@ -1,16 +1,18 @@
-use super::Mbc;
+use super::{Mbc, MbcLike};
 
+#[derive(Clone, Copy)]
 pub struct NoMbc {
     rom: [Option<u8>; 0x8000],
     ram: [Option<u8>; 0x2000],
 }
 
+#[derive(Clone, Copy)]
 enum NoMbcAddr {
     Rom(u16),
     Ram(u16),
 }
 
-impl Mbc for NoMbc {
+impl MbcLike for NoMbc {
     fn get(&self, addr: u16) -> Option<u8> {
         let addr = self.translate(addr);
 
