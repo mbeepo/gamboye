@@ -171,7 +171,39 @@ pub enum Instruction {
     /// - The `subtract` flag is reset to `0`
     /// - The `half carry` flag is reset to `0`
     /// - The `carry` flag is set to the previous value of bit 0
-    RSL(ArithmeticTarget),
+    SRL(ArithmeticTarget),
+    /// Rotates the selected register right, wrapping with the carry flag
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is set to the previous value of bit 0
+    RR(ArithmeticTarget),
+    /// Rotates the selected register left, wrapping with the carry flag
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is set to the previous value of bit 7
+    RL(ArithmeticTarget),
+    /// Rotates the selected register right, putting bit 0 in both the carry flag and bit 7
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is reset to `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is set to the previous value of bit 0
+    RRC(ArithmeticTarget),
+    /// Rotates the selected register left, putting bit 7 in both the carry flag and bit 0
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is reset to `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is set to the previous value of bit 7
+    RLC(ArithmeticTarget),
     // ---------- 16 bit ----------
     /// Adds target to HL and stores the result in HL
     ///

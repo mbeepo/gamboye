@@ -67,7 +67,13 @@ impl Cpu {
 
                 self.sub(value);
             }
-            Instruction::INC(target) | Instruction::DEC(target) | Instruction::RSL(target) => {
+            Instruction::INC(target)
+            | Instruction::DEC(target)
+            | Instruction::SRL(target)
+            | Instruction::RR(target)
+            | Instruction::RL(target)
+            | Instruction::RRC(target)
+            | Instruction::RLC(target) => {
                 let reg = match target {
                     ArithmeticTarget::A => self.regs.a,
                     ArithmeticTarget::B => self.regs.b,
@@ -81,7 +87,11 @@ impl Cpu {
                 let out = match instruction {
                     Instruction::INC(_) => self.inc(reg),
                     Instruction::DEC(_) => self.dec(reg),
-                    Instruction::RSL(_) => self.rsl(reg),
+                    Instruction::SRL(_) => self.rsl(reg),
+                    Instruction::RR(_) => self.rr(reg),
+                    Instruction::RL(_) => self.rl(reg),
+                    Instruction::RRC(_) => self.rrc(reg),
+                    Instruction::RLC(_) => self.rlc(reg),
                     _ => unreachable!(),
                 };
 

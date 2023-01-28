@@ -176,6 +176,73 @@ impl Cpu {
 
         out
     }
+
+    /// Rotates the selected register right, wrapping with the carry flag
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is set to the previous value of bit 0
+    pub(crate) fn rr(&mut self, value: u8) -> u8 {
+        let carry = value & 1;
+        let out = (value >> 1) | ((self.regs.get_cf() as u8) << 7);
+
+        self.regs.set_zf(out == 0);
+        self.regs.set_nf(false);
+        self.regs.set_hf(false);
+        self.regs.set_cf(carry > 0);
+
+        out
+    }
+
+    /// Rotates the selected register left, wrapping with the carry flag
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is set to the previous value of bit 7
+    pub(crate) fn rl(&mut self, value: u8) -> u8 {
+        let carry = value & 1 << 7;
+        let out = (value << 1) | (self.regs.get_cf() as u8);
+
+        self.regs.set_zf(out == 0);
+        self.regs.set_nf(false);
+        self.regs.set_hf(false);
+        self.regs.set_cf(carry > 0);
+
+        out
+    }
+
+    /// Rotates the selected register right, putting bit 0 in both the carry flag and bit 7
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is reset to `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is set to the previous value of bit 0
+    pub(crate) fn rrc(&mut self, value: u8) -> u8 {
+        let carry = value & 1;
+
+        let out = (value >> 1) | (carry << 7);
+
+        self.regs.set_zf(false);
+        self.regs.set_nf(false);
+        self.regs.set_hf(false);
+        self.regs.set_cf(carry > 0);
+
+        out
+    }
+
+    /// Rotates the selected register left, putting bit 7 in both the carry flag and bit 0
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is reset to `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is set to the previous value of bit 7
+    pub(crate) fn rlc(&mut self, value: u8) -> u8 {}
 }
 
 #[cfg(test)]
@@ -320,5 +387,33 @@ mod tests {
         cpu.execute(Instruction::SET(ArithmeticTarget::A, 3));
         assert_eq!(cpu.regs.a, 0b1001_1110);
         assert_eq!(cpu.regs.f.as_byte(), 0b1000_0000);
+    }
+
+    #[test]
+    fn rr() {
+        let mut cpu = init();
+        cpu.regs.b = 0b0000_1101;
+
+        cpu.execute(Instruction::RR(ArithmeticTarget::B));
+        assert_eq!(cpu.regs.b, 0b0000_0110);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0001_0000);
+
+        cpu.execute(Instruction::RR(ArithmeticTarget::B));
+        assert_eq!(cpu.regs.b, 0b1000_0011);
+        assert_eq!(cpu.regs.f.as_byte(), 0);
+    }
+
+    #[test]
+    fn rl() {
+        let mut cpu = init();
+        cpu.regs.b = 0b1011_0000;
+
+        cpu.execute(Instruction::RL(ArithmeticTarget::B));
+        assert_eq!(cpu.regs.b, 0b0110_0000);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0001_0000);
+
+        cpu.execute(Instruction::RL(ArithmeticTarget::B));
+        assert_eq!(cpu.regs.b, 0b1100_0001);
+        assert_eq!(cpu.regs.f.as_byte(), 0);
     }
 }
