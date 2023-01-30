@@ -204,6 +204,35 @@ pub enum Instruction {
     /// - The `half carry` flag is reset to `0`
     /// - The `carry` flag is set to the previous value of bit 7
     RLC(ArithmeticTarget),
+    /// Shifts the selected register right, putting bit 0 in the carry flag and leaving bit 7 unchanged
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is set to the previous value of bit 0
+    SRA(ArithmeticTarget),
+    /// Shifts the selected register left, putting bit 7 in the carry flag and leaving bit 0 unchanged
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is set to the previous value of bit 7
+    SLA(ArithmeticTarget),
+    /// Swaps the contents of the upper and lower nibbles
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is reset to `0`
+    SWAP(ArithmeticTarget),
+    /// Jumps to the address contained in the next two bytes if JumpTest succeeds
+    ///
+    /// ### Flag States
+    /// - No flags are affected
+    JP(JumpTest),
     // ---------- 16 bit ----------
     /// Adds target to HL and stores the result in HL
     ///
@@ -232,4 +261,21 @@ pub enum HLArithmeticTarget {
     DE,
     HL,
     SP,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum JumpTest {
+    NotZero,
+    Zero,
+    NotCarry,
+    Carry,
+    Always,
+}
+
+impl Instruction {
+    pub fn from_byte(byte: u8) -> Option<Instruction> {
+        match byte {
+            _ => None,
+        }
+    }
 }

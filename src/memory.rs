@@ -118,7 +118,7 @@ impl Mmu {
     ///
     /// ### Return Variants
     /// - Returns `Some(u8)` if the selected cell is initialized
-    /// - Returns `None` if the selected cell is uninitialized. It is up to the executor to decide what to do with this
+    /// - Returns `None` if the selected cell is uninitialized
     pub fn get(&self, addr: u16) -> Option<u8> {
         match Self::translate(addr) {
             MmuAddr::Mbc(a) => self.mbc.get(a),

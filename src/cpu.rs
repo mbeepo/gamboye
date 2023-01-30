@@ -21,8 +21,20 @@ impl Cpu {
         }
     }
 
+    fn step(&mut self) {
+        let mut instruction_byte = self.memory.get(self.regs.pc).unwrap();
+
+        let next_pc = if let Some(instruction) = Instruction::from_byte(instruction_byte) {
+            self.execute(instruction)
+        } else {
+            panic!("Unknown instruction found at 0x{:x}", instruction_byte);
+        };
+
+        self.regs.pc = next_pc;
+    }
+
     /// Executes a single instruction
-    pub fn execute(&mut self, instruction: Instruction) {
+    pub(crate) fn execute(&mut self, instruction: Instruction) -> u16 {
         match instruction {
             Instruction::ADD(target)
             | Instruction::ADC(target)
@@ -73,7 +85,10 @@ impl Cpu {
             | Instruction::RR(target)
             | Instruction::RL(target)
             | Instruction::RRC(target)
-            | Instruction::RLC(target) => {
+            | Instruction::RLC(target)
+            | Instruction::SRA(target)
+            | Instruction::SLA(target)
+            | Instruction::SWAP(target) => {
                 let reg = match target {
                     ArithmeticTarget::A => self.regs.a,
                     ArithmeticTarget::B => self.regs.b,
@@ -87,11 +102,14 @@ impl Cpu {
                 let out = match instruction {
                     Instruction::INC(_) => self.inc(reg),
                     Instruction::DEC(_) => self.dec(reg),
-                    Instruction::SRL(_) => self.rsl(reg),
+                    Instruction::SRL(_) => self.srl(reg),
                     Instruction::RR(_) => self.rr(reg),
                     Instruction::RL(_) => self.rl(reg),
                     Instruction::RRC(_) => self.rrc(reg),
                     Instruction::RLC(_) => self.rlc(reg),
+                    Instruction::SRA(_) => self.sra(reg),
+                    Instruction::SLA(_) => self.sla(reg),
+                    Instruction::SWAP(_) => self.swap(reg),
                     _ => unreachable!(),
                 };
 
@@ -167,8 +185,23 @@ impl Cpu {
 
                 *reg = out;
             }
-
             _ => todo!(),
+        }
+
+        match instruction {
+            // prefix instructions
+            Instruction::RLC(_)
+            | Instruction::RRC(_)
+            | Instruction::RL(_)
+            | Instruction::RR(_)
+            | Instruction::SLA(_)
+            | Instruction::SRA(_)
+            | Instruction::SWAP(_)
+            | Instruction::SRL(_)
+            | Instruction::BIT(_, _)
+            | Instruction::RES(_, _)
+            | Instruction::SET(_, _) => self.regs.pc.wrapping_add(2),
+            _ => self.regs.pc.wrapping_add(1),
         }
     }
 }

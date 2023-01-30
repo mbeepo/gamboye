@@ -1,5 +1,7 @@
 use crate::{cpu::Cpu, memory::mbc::Mbc};
 
+use super::JumpTest;
+
 impl Cpu {
     /// Flips the carry flag
     ///
@@ -165,7 +167,7 @@ impl Cpu {
     /// - The `subtract` flag is reset to `0`
     /// - The `half carry` flag is reset to `0`
     /// - The `carry` flag is set to the previous value of bit 0
-    pub(crate) fn rsl(&mut self, value: u8) -> u8 {
+    pub(crate) fn srl(&mut self, value: u8) -> u8 {
         let carry = value & 1 > 0;
         let out = value >> 1;
 
@@ -242,7 +244,84 @@ impl Cpu {
     /// - The `subtract` flag is reset to `0`
     /// - The `half carry` flag is reset to `0`
     /// - The `carry` flag is set to the previous value of bit 7
-    pub(crate) fn rlc(&mut self, value: u8) -> u8 {}
+    pub(crate) fn rlc(&mut self, value: u8) -> u8 {
+        let carry = value & (1 << 7) > 0;
+
+        let out = (value << 1) | (carry as u8);
+
+        self.regs.set_zf(false);
+        self.regs.set_nf(false);
+        self.regs.set_hf(false);
+        self.regs.set_cf(carry);
+
+        out
+    }
+
+    /// Shifts the selected register right, putting bit 0 in the carry flag and leaving bit 7 unchanged
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is set to the previous value of bit 0
+    pub(crate) fn sra(&mut self, value: u8) -> u8 {
+        let carry = value & 1 > 0;
+        let old7 = value & (1 << 7);
+
+        let out = (value >> 1) | old7;
+
+        self.regs.set_zf(out == 0);
+        self.regs.set_nf(false);
+        self.regs.set_hf(false);
+        self.regs.set_cf(carry);
+
+        out
+    }
+
+    /// Shifts the selected register left, putting bit 7 in the carry flag and leaving bit 0 unchanged
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is set to the previous value of bit 7
+    pub(crate) fn sla(&mut self, value: u8) -> u8 {
+        let carry = value & (1 << 7) > 0;
+        let old0 = value & 1;
+
+        let out = (value << 1) | old0;
+
+        self.regs.set_zf(out == 0);
+        self.regs.set_nf(false);
+        self.regs.set_hf(false);
+        self.regs.set_cf(carry);
+
+        out
+    }
+
+    /// Swaps the contents of the upper and lower nibbles
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag is reset to `0`
+    pub(crate) fn swap(&mut self, value: u8) -> u8 {
+        let out = ((value & 0xF0) >> 4) | ((value & 0x0F) << 4);
+
+        self.regs.set_zf(out == 0);
+        self.regs.set_nf(false);
+        self.regs.set_hf(false);
+        self.regs.set_cf(false);
+
+        out
+    }
+
+    /// Jumps to the address contained in the next two bytes if JumpTest succeeds
+    ///
+    /// ### Flag States
+    /// - No flags are affected
+    pub(crate) fn jp(&mut self, test: JumpTest) -> u16 {}
 }
 
 #[cfg(test)]
@@ -415,5 +494,71 @@ mod tests {
         cpu.execute(Instruction::RL(ArithmeticTarget::B));
         assert_eq!(cpu.regs.b, 0b1100_0001);
         assert_eq!(cpu.regs.f.as_byte(), 0);
+    }
+
+    #[test]
+    fn rrc() {
+        let mut cpu = init();
+        cpu.regs.b = 0b0000_1101;
+
+        cpu.execute(Instruction::RRC(ArithmeticTarget::B));
+        assert_eq!(cpu.regs.b, 0b1000_0110);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0001_0000);
+
+        cpu.execute(Instruction::RRC(ArithmeticTarget::B));
+        assert_eq!(cpu.regs.b, 0b0100_0011);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0000_0000);
+    }
+
+    #[test]
+    fn rlc() {
+        let mut cpu = init();
+        cpu.regs.b = 0b1011_0000;
+
+        cpu.execute(Instruction::RLC(ArithmeticTarget::B));
+        assert_eq!(cpu.regs.b, 0b0110_0001);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0001_0000);
+
+        cpu.execute(Instruction::RLC(ArithmeticTarget::B));
+        assert_eq!(cpu.regs.b, 0b1100_0010);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0000_0000);
+    }
+
+    #[test]
+    fn sra() {
+        let mut cpu = init();
+        cpu.regs.b = 0b0000_1101;
+
+        cpu.execute(Instruction::SRA(ArithmeticTarget::B));
+        assert_eq!(cpu.regs.b, 0b0000_0110);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0001_0000);
+
+        cpu.execute(Instruction::SRA(ArithmeticTarget::B));
+        assert_eq!(cpu.regs.b, 0b0000_0011);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0000_0000);
+    }
+
+    #[test]
+    fn sla() {
+        let mut cpu = init();
+        cpu.regs.b = 0b1011_0000;
+
+        cpu.execute(Instruction::SLA(ArithmeticTarget::B));
+        assert_eq!(cpu.regs.b, 0b0110_0000);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0001_0000);
+
+        cpu.execute(Instruction::SLA(ArithmeticTarget::B));
+        assert_eq!(cpu.regs.b, 0b1100_0000);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0000_0000);
+    }
+
+    #[test]
+    fn swap() {
+        let mut cpu = init();
+        cpu.regs.b = 0b1010_0011;
+
+        cpu.execute(Instruction::SWAP(ArithmeticTarget::B));
+        assert_eq!(cpu.regs.b, 0b0011_1010);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0000_0000);
     }
 }
