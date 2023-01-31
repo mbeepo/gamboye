@@ -316,12 +316,6 @@ impl Cpu {
 
         out
     }
-
-    /// Jumps to the address contained in the next two bytes if JumpTest succeeds
-    ///
-    /// ### Flag States
-    /// - No flags are affected
-    pub(crate) fn jp(&mut self, test: JumpTest) -> u16 {}
 }
 
 #[cfg(test)]

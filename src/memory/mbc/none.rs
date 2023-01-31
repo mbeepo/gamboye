@@ -13,7 +13,7 @@ enum NoMbcAddr {
 }
 
 impl MbcLike for NoMbc {
-    fn get(&self, addr: u16) -> Option<u8> {
+    fn load(&self, addr: u16) -> Option<u8> {
         let addr = self.translate(addr);
 
         match addr {

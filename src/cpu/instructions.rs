@@ -1,5 +1,6 @@
 mod arithmetic;
 mod bitwise;
+mod control;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Instruction {
@@ -233,6 +234,16 @@ pub enum Instruction {
     /// ### Flag States
     /// - No flags are affected
     JP(JumpTest),
+    /// Jumps by a number of addresses as specified by the next byte
+    ///
+    /// ### Flag States
+    /// - No flags are affected
+    JR(JumpTest),
+    /// Jumps to the address stored in HL
+    ///
+    /// ### Flag States
+    /// - No flags are affected
+    JPHL,
     // ---------- 16 bit ----------
     /// Adds target to HL and stores the result in HL
     ///
@@ -253,6 +264,7 @@ pub enum ArithmeticTarget {
     E,
     H,
     L,
+    HL,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -273,8 +285,54 @@ pub enum JumpTest {
 }
 
 impl Instruction {
-    pub fn from_byte(byte: u8) -> Option<Instruction> {
+    pub fn from_byte(prefixed: bool, byte: u8) -> Option<Instruction> {
+        if prefixed {
+            Self::from_byte_prefixed(byte)
+        } else {
+            Self::from_byte_short(byte)
+        }
+    }
+
+    fn from_byte_short(byte: u8) -> Option<Instruction> {
         match byte {
+            // JR
+            0x20 => Some(Self::JR(JumpTest::NotZero)),
+            0x30 => Some(Self::JR(JumpTest::NotCarry)),
+            0x18 => Some(Self::JR(JumpTest::Always)),
+            0x28 => Some(Self::JR(JumpTest::Zero)),
+            0x38 => Some(Self::JR(JumpTest::Carry)),
+            // SUB
+            0x90 => Some(Self::SUB(ArithmeticTarget::B)),
+            0x91 => Some(Self::SUB(ArithmeticTarget::C)),
+            0x92 => Some(Self::SUB(ArithmeticTarget::D)),
+            0x93 => Some(Self::SUB(ArithmeticTarget::E)),
+            0x94 => Some(Self::SUB(ArithmeticTarget::H)),
+            0x95 => Some(Self::SUB(ArithmeticTarget::L)),
+            0x96 => Some(Self::SUB(ArithmeticTarget::HL)),
+            0x97 => Some(Self::SUB(ArithmeticTarget::A)),
+            // JP
+            0xC2 => Some(Self::JP(JumpTest::NotZero)),
+            0xD2 => Some(Self::JP(JumpTest::NotCarry)),
+            0xC3 => Some(Self::JP(JumpTest::Always)),
+            0xCA => Some(Self::JP(JumpTest::Zero)),
+            0xDA => Some(Self::JP(JumpTest::Carry)),
+            // JPHL
+            0xE9 => Some(Self::JPHL),
+            _ => None,
+        }
+    }
+
+    fn from_byte_prefixed(byte: u8) -> Option<Instruction> {
+        match byte {
+            // SWAP
+            0x30 => Some(Self::SWAP(ArithmeticTarget::B)),
+            0x31 => Some(Self::SWAP(ArithmeticTarget::C)),
+            0x32 => Some(Self::SWAP(ArithmeticTarget::D)),
+            0x33 => Some(Self::SWAP(ArithmeticTarget::E)),
+            0x34 => Some(Self::SWAP(ArithmeticTarget::H)),
+            0x35 => Some(Self::SWAP(ArithmeticTarget::L)),
+            0x36 => Some(Self::SWAP(ArithmeticTarget::HL)),
+            0x37 => Some(Self::SWAP(ArithmeticTarget::A)),
             _ => None,
         }
     }

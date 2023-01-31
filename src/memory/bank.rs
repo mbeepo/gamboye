@@ -27,7 +27,7 @@ impl VramBank {
     ///
     /// ### Panic Conditions
     /// This method will panic if `addr` is outside of the bounds `0x0000 - 0x1FFF`
-    pub fn get(&self, addr: u16) -> Option<u8> {
+    pub fn load(&self, addr: u16) -> Option<u8> {
         if addr < 0x2000 {
             self.memory[self.selected as usize][addr as usize]
         } else {
@@ -78,7 +78,7 @@ impl WramBank {
     ///
     /// ### Panic Conditions
     /// This method will panic if `addr` is outside of the bounds `0x0000 - 0x1FFF`
-    pub fn get(&self, addr: u16) -> Option<u8> {
+    pub fn load(&self, addr: u16) -> Option<u8> {
         if addr < 0x1000 {
             self.main[addr as usize]
         } else if addr < 0x2000 {

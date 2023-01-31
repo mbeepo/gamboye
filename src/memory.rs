@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use self::{
     bank::{VramBank, WramBank},
     init::init_io,
@@ -119,11 +121,11 @@ impl Mmu {
     /// ### Return Variants
     /// - Returns `Some(u8)` if the selected cell is initialized
     /// - Returns `None` if the selected cell is uninitialized
-    pub fn get(&self, addr: u16) -> Option<u8> {
+    pub fn load(&self, addr: u16) -> Option<u8> {
         match Self::translate(addr) {
-            MmuAddr::Mbc(a) => self.mbc.get(a),
-            MmuAddr::Vram(a) => self.vram.get(a),
-            MmuAddr::Wram(a) => self.wram.get(a),
+            MmuAddr::Mbc(a) => self.mbc.load(a),
+            MmuAddr::Vram(a) => self.vram.load(a),
+            MmuAddr::Wram(a) => self.wram.load(a),
             MmuAddr::Oam(a) => self.oam[a as usize],
             // On CGB revision E, reading from this segment returns the high nibble of the lower address byte twice
             MmuAddr::Prohibited => {
@@ -158,6 +160,14 @@ impl Mmu {
             }
             MmuAddr::Hram(a) => self.hram[a as usize] = Some(value),
             MmuAddr::Ie => self.ie = value,
+        }
+    }
+
+    /// Splices a set of `values` into memory, starting at `start`
+    pub fn splice(&mut self, start: u16, values: &[u8]) {
+        for rel in 0..values.len() as u16 {
+            let abs = rel.wrapping_add(start);
+            self.set(abs, values[rel as usize]);
         }
     }
 }
@@ -227,7 +237,7 @@ mod tests {
         }
 
         for (i, e) in addresses.iter().enumerate() {
-            assert_eq!(memory.get(*e), Some(i as u8));
+            assert_eq!(memory.load(*e), Some(i as u8));
         }
     }
 
@@ -237,7 +247,7 @@ mod tests {
 
         // store 45 in echo ram, make sure it is reflected in wram
         memory.set(0xEEFF, 45);
-        assert_eq!(memory.get(0xCEFF), Some(45));
+        assert_eq!(memory.load(0xCEFF), Some(45));
     }
 
     #[test]
@@ -246,15 +256,15 @@ mod tests {
 
         // set D800 in bank 1 to 0x10
         memory.set(0xD800, 0x10);
-        assert_eq!(memory.get(0xD800), Some(0x10));
+        assert_eq!(memory.load(0xD800), Some(0x10));
 
         // switch to bank 2
         memory.set(0xFF70, 2);
-        assert_eq!(memory.get(0xD800), None);
+        assert_eq!(memory.load(0xD800), None);
 
         // switch back to bank 1
         memory.set(0xFF70, 1);
-        assert_eq!(memory.get(0xD800), Some(0x10));
+        assert_eq!(memory.load(0xD800), Some(0x10));
     }
 
     #[test]
@@ -264,6 +274,6 @@ mod tests {
         // should do nothing
         memory.set(0xFEC8, 10);
 
-        assert_eq!(memory.get(0xFEC8), Some(0xCC));
+        assert_eq!(memory.load(0xFEC8), Some(0xCC));
     }
 }

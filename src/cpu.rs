@@ -21,10 +21,19 @@ impl Cpu {
         }
     }
 
-    fn step(&mut self) {
-        let mut instruction_byte = self.memory.get(self.regs.pc).unwrap();
+    pub(crate) fn step(&mut self) {
+        let instruction_byte = self.memory.load(self.regs.pc).unwrap();
+        let (instruction_byte, prefixed) = if instruction_byte == 0xC8 {
+            (
+                self.memory.load(self.regs.pc.wrapping_add(1)).unwrap(),
+                true,
+            )
+        } else {
+            (instruction_byte, false)
+        };
 
-        let next_pc = if let Some(instruction) = Instruction::from_byte(instruction_byte) {
+        let next_pc = if let Some(instruction) = Instruction::from_byte(prefixed, instruction_byte)
+        {
             self.execute(instruction)
         } else {
             panic!("Unknown instruction found at 0x{:x}", instruction_byte);
@@ -51,6 +60,7 @@ impl Cpu {
                     ArithmeticTarget::E => self.regs.e,
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
+                    ArithmeticTarget::HL => self.load_from_hl(),
                 };
 
                 let new_value = match instruction {
@@ -75,6 +85,7 @@ impl Cpu {
                     ArithmeticTarget::E => self.regs.e,
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
+                    ArithmeticTarget::HL => self.load_from_hl(),
                 };
 
                 self.sub(value);
@@ -97,6 +108,7 @@ impl Cpu {
                     ArithmeticTarget::E => self.regs.e,
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
+                    ArithmeticTarget::HL => self.load_from_hl(),
                 };
 
                 let out = match instruction {
@@ -113,17 +125,16 @@ impl Cpu {
                     _ => unreachable!(),
                 };
 
-                let reg = match target {
-                    ArithmeticTarget::A => &mut self.regs.a,
-                    ArithmeticTarget::B => &mut self.regs.b,
-                    ArithmeticTarget::C => &mut self.regs.c,
-                    ArithmeticTarget::D => &mut self.regs.d,
-                    ArithmeticTarget::E => &mut self.regs.e,
-                    ArithmeticTarget::H => &mut self.regs.h,
-                    ArithmeticTarget::L => &mut self.regs.l,
+                match target {
+                    ArithmeticTarget::A => self.regs.a = out,
+                    ArithmeticTarget::B => self.regs.b = out,
+                    ArithmeticTarget::C => self.regs.c = out,
+                    ArithmeticTarget::D => self.regs.d = out,
+                    ArithmeticTarget::E => self.regs.e = out,
+                    ArithmeticTarget::H => self.regs.h = out,
+                    ArithmeticTarget::L => self.regs.l = out,
+                    ArithmeticTarget::HL => self.set_from_hl(out),
                 };
-
-                *reg = out;
             }
             Instruction::CCF => self.ccf(),
             Instruction::SCF => self.scf(),
@@ -152,6 +163,7 @@ impl Cpu {
                     ArithmeticTarget::E => self.regs.e,
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
+                    ArithmeticTarget::HL => self.load_from_hl(),
                 };
 
                 self.bit(byte, bit);
@@ -165,6 +177,7 @@ impl Cpu {
                     ArithmeticTarget::E => self.regs.e,
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
+                    ArithmeticTarget::HL => self.load_from_hl(),
                 };
 
                 let out = match instruction {
@@ -173,17 +186,25 @@ impl Cpu {
                     _ => unreachable!(),
                 };
 
-                let reg = match target {
-                    ArithmeticTarget::A => &mut self.regs.a,
-                    ArithmeticTarget::B => &mut self.regs.b,
-                    ArithmeticTarget::C => &mut self.regs.c,
-                    ArithmeticTarget::D => &mut self.regs.d,
-                    ArithmeticTarget::E => &mut self.regs.e,
-                    ArithmeticTarget::H => &mut self.regs.h,
-                    ArithmeticTarget::L => &mut self.regs.l,
+                match target {
+                    ArithmeticTarget::A => self.regs.a = out,
+                    ArithmeticTarget::B => self.regs.b = out,
+                    ArithmeticTarget::C => self.regs.c = out,
+                    ArithmeticTarget::D => self.regs.d = out,
+                    ArithmeticTarget::E => self.regs.e = out,
+                    ArithmeticTarget::H => self.regs.h = out,
+                    ArithmeticTarget::L => self.regs.l = out,
+                    ArithmeticTarget::HL => self.set_from_hl(out),
                 };
-
-                *reg = out;
+            }
+            Instruction::JP(test) => {
+                return self.jp(test);
+            }
+            Instruction::JR(test) => {
+                return self.jr(test);
+            }
+            Instruction::JPHL => {
+                return self.jphl();
             }
             _ => todo!(),
         }
@@ -201,7 +222,16 @@ impl Cpu {
             | Instruction::BIT(_, _)
             | Instruction::RES(_, _)
             | Instruction::SET(_, _) => self.regs.pc.wrapping_add(2),
+            // normal instructions (jump instructions already returned)
             _ => self.regs.pc.wrapping_add(1),
         }
+    }
+
+    fn load_from_hl(&self) -> u8 {
+        self.memory.load(self.regs.get_hl()).unwrap()
+    }
+
+    fn set_from_hl(&mut self, value: u8) {
+        self.memory.set(self.regs.get_hl(), value);
     }
 }

@@ -16,15 +16,15 @@ pub enum Mbc {
 /// Switchable rom bank using mappers. Stands for Memory Bank Controller
 pub trait MbcLike {
     /// Gets the byte at global address `addr`
-    fn get(&self, addr: u16) -> Option<u8>;
+    fn load(&self, addr: u16) -> Option<u8>;
     /// Sets the cell at global address `addr` to `value`
     fn set(&mut self, addr: u16, value: u8);
 }
 
 impl MbcLike for Mbc {
-    fn get(&self, addr: u16) -> Option<u8> {
+    fn load(&self, addr: u16) -> Option<u8> {
         match self {
-            Self::NoMbc(mbc) => mbc.get(addr),
+            Self::NoMbc(mbc) => mbc.load(addr),
         }
     }
 
