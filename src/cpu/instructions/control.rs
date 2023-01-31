@@ -17,8 +17,8 @@ impl Cpu {
         };
 
         if jump {
-            let lsb = self.memory.load(self.regs.pc.wrapping_add(1)).unwrap() as u16;
-            let msb = self.memory.load(self.regs.pc.wrapping_add(2)).unwrap() as u16;
+            let lsb = self.load_ahead(1) as u16;
+            let msb = self.load_ahead(2) as u16;
 
             (msb << 8) | lsb
         } else {
@@ -40,7 +40,9 @@ impl Cpu {
         };
 
         if jump {
-            let rel = self.memory.load(self.regs.pc.wrapping_add(1)).unwrap() as i8 as u16;
+            // Casting to u16 from i8 instead of u8 uses sign extension
+            // This effectively allows subtraction
+            let rel = self.load_ahead(1) as i8 as u16;
 
             self.regs.pc.wrapping_add(rel)
         } else {

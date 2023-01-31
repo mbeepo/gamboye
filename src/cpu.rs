@@ -61,6 +61,7 @@ impl Cpu {
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
                     ArithmeticTarget::HL => self.load_from_hl(),
+                    ArithmeticTarget::D8 => self.load_ahead(1),
                 };
 
                 let new_value = match instruction {
@@ -86,6 +87,7 @@ impl Cpu {
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
                     ArithmeticTarget::HL => self.load_from_hl(),
+                    ArithmeticTarget::D8 => self.load_ahead(1),
                 };
 
                 self.sub(value);
@@ -109,6 +111,9 @@ impl Cpu {
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
                     ArithmeticTarget::HL => self.load_from_hl(),
+                    ArithmeticTarget::D8 => unreachable!(
+                        "There is no opcode for this instruction with an immediate argument"
+                    ),
                 };
 
                 let out = match instruction {
@@ -134,6 +139,9 @@ impl Cpu {
                     ArithmeticTarget::H => self.regs.h = out,
                     ArithmeticTarget::L => self.regs.l = out,
                     ArithmeticTarget::HL => self.set_from_hl(out),
+                    ArithmeticTarget::D8 => unreachable!(
+                        "There is no opcode for this instruction with an immediate argument"
+                    ),
                 };
             }
             Instruction::CCF => self.ccf(),
@@ -164,6 +172,7 @@ impl Cpu {
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
                     ArithmeticTarget::HL => self.load_from_hl(),
+                    ArithmeticTarget::D8 => self.load_ahead(1),
                 };
 
                 self.bit(byte, bit);
@@ -178,6 +187,9 @@ impl Cpu {
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
                     ArithmeticTarget::HL => self.load_from_hl(),
+                    ArithmeticTarget::D8 => unreachable!(
+                        "There is no opcode for this instruction with an immediate argument"
+                    ),
                 };
 
                 let out = match instruction {
@@ -195,6 +207,9 @@ impl Cpu {
                     ArithmeticTarget::H => self.regs.h = out,
                     ArithmeticTarget::L => self.regs.l = out,
                     ArithmeticTarget::HL => self.set_from_hl(out),
+                    ArithmeticTarget::D8 => unreachable!(
+                        "There is no opcode for this instruction with an immediate argument"
+                    ),
                 };
             }
             Instruction::JP(test) => {
@@ -205,6 +220,9 @@ impl Cpu {
             }
             Instruction::JPHL => {
                 return self.jphl();
+            }
+            Instruction::LD(transfer) => {
+                self.ld(transfer);
             }
             _ => todo!(),
         }
@@ -233,5 +251,9 @@ impl Cpu {
 
     fn set_from_hl(&mut self, value: u8) {
         self.memory.set(self.regs.get_hl(), value);
+    }
+
+    fn load_ahead(&self, by: u16) -> u8 {
+        self.memory.load(self.regs.pc.wrapping_add(by)).unwrap()
     }
 }

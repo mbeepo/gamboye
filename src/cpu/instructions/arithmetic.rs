@@ -33,7 +33,7 @@ impl Cpu {
     /// - The `half carry` flag is set if a bit was carried from bit 3 to bit 4
     /// - The `carry` flag is set if the output wraps around `255` to `0`
     pub fn add_carry(&mut self, value: u8) -> u8 {
-        self.add(value + self.regs.get_cf() as u8)
+        self.add(value.wrapping_add(self.regs.get_cf() as u8))
     }
 
     /// Subtracts a u8 from register A
@@ -68,7 +68,7 @@ impl Cpu {
     /// - The `half carry` flag is reset to `0`
     /// - The `carry` flag is set if the output wraps around `0` to `255`
     pub fn sub_carry(&mut self, value: u8) -> u8 {
-        self.sub(value + self.regs.get_cf() as u8)
+        self.sub(value.wrapping_add(self.regs.get_cf() as u8))
     }
 
     /// ANDs a u8 together with register A
@@ -194,13 +194,6 @@ mod tests {
             Mmu,
         },
     };
-
-    impl Registers {
-        fn set_bc(&mut self, value: u16) {
-            self.b = (value >> 8) as u8;
-            self.c = (value & 0xFF) as u8;
-        }
-    }
 
     fn init() -> Cpu {
         let mmu = Mmu::new(MbcKind::NoMbc);

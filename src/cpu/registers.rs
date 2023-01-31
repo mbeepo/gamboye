@@ -73,9 +73,21 @@ impl Registers {
         ((self.b as u16) << 8) | self.c as u16
     }
 
+    /// Sets the word stored in the `BC` register pair
+    pub fn set_bc(&mut self, value: u16) {
+        self.b = (value >> 8) as u8;
+        self.c = (value & 0xFF) as u8;
+    }
+
     /// Gets the word stored in the `DE` register pair
     pub fn get_de(&self) -> u16 {
         ((self.d as u16) << 8) | self.e as u16
+    }
+
+    /// Sets the word stored in the `DE` register pair
+    pub fn set_de(&mut self, value: u16) {
+        self.d = (value >> 8) as u8;
+        self.e = (value & 0xFF) as u8;
     }
 
     /// Gets the word stored in the `HL` register pair
