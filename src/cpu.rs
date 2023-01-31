@@ -212,18 +212,12 @@ impl Cpu {
                     ),
                 };
             }
-            Instruction::JP(test) => {
-                return self.jp(test);
-            }
-            Instruction::JR(test) => {
-                return self.jr(test);
-            }
-            Instruction::JPHL => {
-                return self.jphl();
-            }
-            Instruction::LD(transfer) => {
-                self.ld(transfer);
-            }
+            Instruction::JP(test) => return self.jp(test),
+            Instruction::JR(test) => return self.jr(test),
+            Instruction::JPHL => return self.jphl(),
+            Instruction::LD(transfer) => return self.ld(transfer),
+            Instruction::PUSH(source) => self.push(source),
+            Instruction::POP(target) => self.pop(target),
             _ => todo!(),
         }
 

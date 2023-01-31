@@ -3,7 +3,11 @@ use crate::cpu::Cpu;
 use super::{AddressSource, ByteAddressSource, ByteSource, ByteTarget, LoadType, WordTarget};
 
 impl Cpu {
-    pub(crate) fn ld(&mut self, transfer: LoadType) {
+    /// Loads data from one place to another
+    ///
+    /// ### Flag States
+    /// - No flags are affected
+    pub(crate) fn ld(&mut self, transfer: LoadType) -> u16 {
         match transfer {
             LoadType::Byte(target, source) => {
                 let value = match source {
@@ -27,6 +31,11 @@ impl Cpu {
                     ByteTarget::H => self.regs.h = value,
                     ByteTarget::L => self.regs.l = value,
                     ByteTarget::HL => self.set_from_hl(value),
+                };
+
+                match source {
+                    ByteSource::D8 => return 2,
+                    _ => return 1,
                 }
             }
             LoadType::Word(target) => {
@@ -34,11 +43,11 @@ impl Cpu {
                     WordTarget::HLFromSP => {
                         self.regs
                             .set_hl(self.regs.sp.wrapping_add(self.load_ahead(1) as i8 as u16));
-                        return;
+                        return 2;
                     }
                     WordTarget::SPFromHL => {
                         self.regs.sp = self.regs.get_hl();
-                        return;
+                        return 1;
                     }
                     _ => {}
                 }
@@ -61,7 +70,9 @@ impl Cpu {
                         self.memory
                             .set(source.wrapping_add(1), ((self.regs.sp & 0xFF00) >> 8) as u8)
                     }
-                }
+                };
+
+                return 3;
             }
             LoadType::IndirectIntoA(source) => {
                 self.regs.a = match source {
@@ -77,7 +88,9 @@ impl Cpu {
                         self.regs.set_hl(self.regs.get_hl().wrapping_sub(1));
                         out
                     }
-                }
+                };
+
+                return 1;
             }
             LoadType::IndirectFromA(target) => {
                 let value = self.regs.a;
@@ -93,26 +106,35 @@ impl Cpu {
                         self.set_from_hl(value);
                         self.regs.set_hl(self.regs.get_hl().wrapping_sub(1));
                     }
-                }
+                };
+
+                return 1;
             }
             LoadType::ByteAddressIntoA(source) => {
                 self.regs.a = match source {
-                    ByteAddressSource::A8 => self
-                        .memory
-                        .load(0xFF00 + self.load_ahead(1) as u16)
-                        .unwrap(),
+                    ByteAddressSource::A8 => {
+                        self.memory
+                            .load(0xFF00 + self.load_ahead(1) as u16)
+                            .unwrap();
+                        return 2;
+                    }
                     ByteAddressSource::C => self.memory.load(0xFF00 + self.regs.c as u16).unwrap(),
-                }
+                };
+
+                return 1;
             }
             LoadType::ByteAddressFromA(target) => {
                 let value = self.regs.a;
 
                 match target {
                     ByteAddressSource::A8 => {
-                        self.memory.set(0xFF00 + self.load_ahead(1) as u16, value)
+                        self.memory.set(0xFF00 + self.load_ahead(1) as u16, value);
+                        return 2;
                     }
                     ByteAddressSource::C => self.memory.set(0xFF00 + self.regs.c as u16, value),
-                }
+                };
+
+                return 1;
             }
         }
     }

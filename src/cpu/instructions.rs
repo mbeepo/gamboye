@@ -2,6 +2,7 @@ mod arithmetic;
 mod bitwise;
 mod control;
 mod load;
+mod stack;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Instruction {
@@ -250,6 +251,16 @@ pub enum Instruction {
     /// ### Flag States
     /// - No flags are affected
     LD(LoadType),
+    /// Pushes a word to the stack
+    ///
+    /// ### Flag States
+    /// - No flags are affected
+    PUSH(StackTarget),
+    /// Pops a word from the stack
+    ///
+    /// ### Flag States
+    /// - No flags are affected
+    POP(StackTarget),
     // ---------- 16 bit ----------
     /// Adds target to HL and stores the result in HL
     ///
@@ -350,6 +361,14 @@ pub enum AddressSource {
 pub enum ByteAddressSource {
     A8,
     C,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum StackTarget {
+    BC,
+    DE,
+    HL,
+    AF,
 }
 
 impl Instruction {
@@ -496,6 +515,16 @@ impl Instruction {
             0xC3 => Some(Self::JP(JumpTest::Always)),
             0xCA => Some(Self::JP(JumpTest::Zero)),
             0xDA => Some(Self::JP(JumpTest::Carry)),
+            // POP
+            0xC1 => Some(Self::POP(StackTarget::BC)),
+            0xD1 => Some(Self::POP(StackTarget::DE)),
+            0xE1 => Some(Self::POP(StackTarget::HL)),
+            0xF1 => Some(Self::POP(StackTarget::AF)),
+            // PUSH
+            0xC5 => Some(Self::PUSH(StackTarget::BC)),
+            0xD5 => Some(Self::PUSH(StackTarget::DE)),
+            0xE5 => Some(Self::PUSH(StackTarget::HL)),
+            0xF5 => Some(Self::PUSH(StackTarget::AF)),
             // JPHL
             0xE9 => Some(Self::JPHL),
             _ => None,

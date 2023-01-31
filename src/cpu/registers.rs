@@ -36,6 +36,14 @@ impl Flags {
 
         bits
     }
+
+    /// Sets the flags based on the bits of `value`
+    pub fn set_bits(&mut self, value: u8) {
+        self.zero = value & 0b1000_0000 > 0;
+        self.subtract = value & 0b0100_0000 > 0;
+        self.half_carry = value & 0b0010_0000 > 0;
+        self.carry = value & 0b0001_0000 > 0
+    }
 }
 
 pub struct Registers {
@@ -99,6 +107,17 @@ impl Registers {
     pub fn set_hl(&mut self, value: u16) {
         self.h = (value >> 8) as u8;
         self.l = (value & 0xFF) as u8;
+    }
+
+    /// Gets the word stored in the `AF` register pair
+    pub fn get_af(&self) -> u16 {
+        ((self.a as u16) << 8) | self.f.as_byte() as u16
+    }
+
+    /// Sets the word stored in the `AF` register pair
+    pub fn set_af(&mut self, value: u16) {
+        self.a = (value >> 8) as u8;
+        self.f.set_bits((value & 0xFF) as u8);
     }
 
     /// Gets the `zero` flag
