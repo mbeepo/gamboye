@@ -162,6 +162,37 @@ impl Cpu {
         out
     }
 
+    /// I wrote this while brainfoggin i will explain eventually for my future self
+    /// Used this as a reference https://forums.nesdev.org/viewtopic.php?t=15944
+    pub fn daa(&mut self) {
+        let mut a = self.regs.a;
+
+        if !self.regs.get_nf() {
+            // previous instruction was not a subtraction
+            if self.regs.get_cf() || a > 0x99 {
+                a += 0x60;
+                self.regs.set_cf(true);
+            }
+
+            if self.regs.get_hf() || a & 0x0F > 0x09 {
+                a += 0x06;
+            }
+        } else {
+            // previous instruction was a subtraction
+            if self.regs.get_cf() {
+                a -= 0x60;
+            }
+
+            if self.regs.get_hf() {
+                a -= 0x06;
+            }
+        }
+
+        self.regs.a = a;
+        self.regs.set_zf(a == 0);
+        self.regs.set_hf(false);
+    }
+
     // ---------- 16 bit ----------
     /// Adds a u16 to register pair HL
     ///
@@ -186,7 +217,7 @@ impl Cpu {
 mod tests {
     use crate::{
         cpu::{
-            instructions::HLArithmeticTarget, registers::Registers, ArithmeticTarget, Cpu,
+            instructions::WordArithmeticTarget, registers::Registers, ArithmeticTarget, Cpu,
             Instruction,
         },
         memory::{
@@ -404,7 +435,7 @@ mod tests {
         cpu.regs.set_hl(10_000);
         cpu.regs.set_bc(5000);
 
-        cpu.execute(Instruction::ADDHL(HLArithmeticTarget::BC));
+        cpu.execute(Instruction::ADDHL(WordArithmeticTarget::BC));
 
         assert_eq!(cpu.regs.get_hl(), 15_000);
     }
@@ -415,7 +446,7 @@ mod tests {
         cpu.regs.set_hl(8);
         cpu.regs.set_bc(8);
 
-        cpu.execute(Instruction::ADDHL(HLArithmeticTarget::BC));
+        cpu.execute(Instruction::ADDHL(WordArithmeticTarget::BC));
 
         assert_eq!(cpu.regs.get_hl(), 16);
         assert_eq!(cpu.regs.f.as_byte(), 0b0010_0000);

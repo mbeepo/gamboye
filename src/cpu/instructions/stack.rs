@@ -62,7 +62,7 @@ mod tests {
     #[test]
     fn push_pop() {
         let mut cpu = init();
-        // Push them onto the stack in the order [BC, DE, HL, AF], and pop off in the same order, switching the values of the registers
+        // Push them onto the stack in the order [BC, DE, HL, AF], and pop off in the same order, effectively switching the values of the registers
         let start = &[0xC5, 0xD5, 0xE5, 0xF5, 0xC1, 0xD1, 0xE1, 0xF1];
 
         cpu.regs.sp = 0x3FFF;

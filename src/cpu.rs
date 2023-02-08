@@ -1,7 +1,7 @@
 use crate::memory::Mmu;
 
 use self::{
-    instructions::{ArithmeticTarget, HLArithmeticTarget, Instruction},
+    instructions::{ArithmeticTarget, Instruction, WordArithmeticTarget},
     registers::Registers,
 };
 
@@ -153,10 +153,10 @@ impl Cpu {
             Instruction::CPL => self.cpl(),
             Instruction::ADDHL(target) => {
                 let value = match target {
-                    HLArithmeticTarget::BC => self.regs.get_bc(),
-                    HLArithmeticTarget::DE => self.regs.get_de(),
-                    HLArithmeticTarget::HL => self.regs.get_hl(),
-                    HLArithmeticTarget::SP => self.regs.sp,
+                    WordArithmeticTarget::BC => self.regs.get_bc(),
+                    WordArithmeticTarget::DE => self.regs.get_de(),
+                    WordArithmeticTarget::HL => self.regs.get_hl(),
+                    WordArithmeticTarget::SP => self.regs.sp,
                 };
 
                 let new_value = self.add_hl(value);
