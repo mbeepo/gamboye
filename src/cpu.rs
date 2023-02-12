@@ -162,6 +162,9 @@ impl Cpu {
                 let new_value = self.add_hl(value);
                 self.regs.set_hl(new_value);
             }
+            Instruction::ADDSP(value) => {
+                self.regs.sp = self.add_sp(value);
+            }
             Instruction::BIT(target, bit) => {
                 let byte = match target {
                     ArithmeticTarget::A => self.regs.a,

@@ -162,8 +162,16 @@ impl Cpu {
         out
     }
 
-    /// I wrote this while brainfoggin i will explain eventually for my future self
-    /// Used this as a reference https://forums.nesdev.org/viewtopic.php?t=15944
+    /// Converts A to a two digit binary coded decimal number
+    ///
+    /// ### Input States
+    /// - If the `carry` flag is set, 0x60 will be added to A even if its first nibble is less than 0xA
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is unaffected
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag remains the same
     pub fn daa(&mut self) {
         let mut a = self.regs.a;
 
@@ -204,10 +212,30 @@ impl Cpu {
     pub fn add_hl(&mut self, value: u16) -> u16 {
         let (out, overflowed) = self.regs.get_hl().overflowing_add(value);
 
-        self.regs.f.zero = out == 0;
-        self.regs.f.subtract = false;
-        self.regs.f.half_carry = (self.regs.l & 0xF) + (value & 0xF) as u8 & 0x10 == 0x10;
-        self.regs.f.carry = overflowed;
+        self.regs.set_zf(out == 0);
+        self.regs.set_nf(false);
+        self.regs
+            .set_hf((self.regs.l & 0xF) + (value & 0xF) as u8 & 0x10 == 0x10);
+        self.regs.set_cf(overflowed);
+
+        out
+    }
+
+    /// Adds an i8 to the stack pointer
+    ///
+    /// ### Flag States
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is set if bit 3 overflows into bit 4
+    /// - The `carry` flag is set if the output wraps around `65535` to `0`
+    pub fn add_sp(&mut self, value: i8) -> u16 {
+        let (out, overflowed) = self.regs.sp.overflowing_add(value as u16);
+
+        self.regs.set_zf(out == 0);
+        self.regs.set_nf(false);
+        self.regs
+            .set_hf((self.regs.sp & 0xF) as u8 + (value & 0xF) as u8 & 0x10 == 0x10);
+        self.regs.set_cf(overflowed);
 
         out
     }

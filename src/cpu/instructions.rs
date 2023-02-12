@@ -276,6 +276,13 @@ pub enum Instruction {
     /// - The `half carry` flag is set if bit 3 overflows into bit 4
     /// - The `carry` flag is set if the output wraps around `65535` to `0`
     ADDHL(WordArithmeticTarget),
+    /// Adds target to SP and stores the result in SP
+    ///
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is reset to `0`
+    /// - The `half carry` flag is set if bit 3 overflows into bit 4
+    /// - The `carry` flag is set if the output wraps around `65535` to `0`
+    ADDSP(i8),
 }
 
 #[derive(Clone, Copy, Debug)]
