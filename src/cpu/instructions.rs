@@ -86,11 +86,6 @@ pub enum Instruction {
     /// - The `half carry` flag is set if a bit was carried from bit 3 to bit 4
     /// - The `carry` flag is set if the output wraps around `255` to `0`
     INC(ArithmeticTarget),
-    /// Increments target pair by 1
-    ///
-    /// ### Flag States
-    /// - No flags are affected
-    INCW(WordArithmeticTarget),
     /// Decrements target by 1
     ///
     /// ### Flag States
@@ -267,6 +262,7 @@ pub enum Instruction {
     /// ### Flag States
     /// - No flags are affected
     POP(StackTarget),
+    STOP,
     // ---------- 16 bit ----------
     /// Adds target to HL and stores the result in HL
     ///
@@ -283,6 +279,16 @@ pub enum Instruction {
     /// - The `half carry` flag is set if bit 3 overflows into bit 4
     /// - The `carry` flag is set if the output wraps around `65535` to `0`
     ADDSP(i8),
+    /// Increments target pair by 1
+    ///
+    /// ### Flag States
+    /// - No flags are affected
+    INCW(WordArithmeticTarget),
+    /// Decrements target pair by 1
+    ///
+    /// ### Flag States
+    /// - No flags are affected
+    DECW(WordArithmeticTarget),
 }
 
 #[derive(Clone, Copy, Debug)]

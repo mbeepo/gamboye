@@ -165,6 +165,18 @@ impl Cpu {
             Instruction::ADDSP(value) => {
                 self.regs.sp = self.add_sp(value);
             }
+            Instruction::INCW(target) => match target {
+                WordArithmeticTarget::BC => self.regs.set_bc(self.regs.get_bc().wrapping_add(1)),
+                WordArithmeticTarget::DE => self.regs.set_de(self.regs.get_de().wrapping_add(1)),
+                WordArithmeticTarget::HL => self.regs.set_hl(self.regs.get_hl().wrapping_add(1)),
+                WordArithmeticTarget::SP => self.regs.sp = self.regs.sp.wrapping_add(1),
+            },
+            Instruction::DECW(target) => match target {
+                WordArithmeticTarget::BC => self.regs.set_bc(self.regs.get_bc().wrapping_sub(1)),
+                WordArithmeticTarget::DE => self.regs.set_de(self.regs.get_de().wrapping_sub(1)),
+                WordArithmeticTarget::HL => self.regs.set_hl(self.regs.get_hl().wrapping_sub(1)),
+                WordArithmeticTarget::SP => self.regs.sp = self.regs.sp.wrapping_sub(1),
+            },
             Instruction::BIT(target, bit) => {
                 let byte = match target {
                     ArithmeticTarget::A => self.regs.a,
