@@ -4,9 +4,6 @@ use super::JumpTest;
 
 impl Cpu {
     /// Jumps to the address contained in the next two bytes if JumpTest succeeds
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     pub(crate) fn jp(&self, test: JumpTest) -> u16 {
         let jump = match test {
             JumpTest::NotZero => !self.regs.get_zf(),
@@ -27,9 +24,6 @@ impl Cpu {
     }
 
     /// Jumps by a number of addresses as specified by the next byte
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     pub(crate) fn jr(&self, test: JumpTest) -> u16 {
         let jump = match test {
             JumpTest::NotZero => !self.regs.get_zf(),
@@ -51,9 +45,6 @@ impl Cpu {
     }
 
     /// Jumps to the address stored in HL
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     pub(crate) fn jphl(&self) -> u16 {
         self.regs.pc.wrapping_add(self.regs.get_hl())
     }

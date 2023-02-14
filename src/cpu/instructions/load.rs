@@ -4,9 +4,6 @@ use super::{AddressSource, ByteAddressSource, ByteSource, ByteTarget, LoadType, 
 
 impl Cpu {
     /// Loads data from one place to another
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     pub(crate) fn ld(&mut self, transfer: LoadType) -> u16 {
         match transfer {
             LoadType::Byte(target, source) => {
@@ -19,7 +16,7 @@ impl Cpu {
                     ByteSource::H => self.regs.h,
                     ByteSource::L => self.regs.l,
                     ByteSource::HL => self.load_from_hl(),
-                    ByteSource::D8 => self.load_ahead(1),
+                    ByteSource::Immediate => self.load_ahead(1),
                 };
 
                 match target {
@@ -34,7 +31,7 @@ impl Cpu {
                 };
 
                 match source {
-                    ByteSource::D8 => return 2,
+                    ByteSource::Immediate => return 2,
                     _ => return 1,
                 }
             }
@@ -60,12 +57,14 @@ impl Cpu {
                     WordTarget::BC => self.regs.set_bc(source),
                     WordTarget::DE => self.regs.set_de(source),
                     WordTarget::HL => self.regs.set_hl(source),
-                    WordTarget::HLFromSP => self
-                        .regs
-                        .set_hl(self.regs.sp.wrapping_add(lsb as i8 as u16)),
+                    WordTarget::HLFromSP => {
+                        unreachable!("Returned before the 16 bit immediate was read")
+                    }
                     WordTarget::SP => self.regs.sp = source,
-                    WordTarget::SPFromHL => unreachable!(),
-                    WordTarget::A16 => {
+                    WordTarget::SPFromHL => {
+                        unreachable!("Returned before the 16 bit immediate was read")
+                    }
+                    WordTarget::Immediate => {
                         self.memory.set(source, (self.regs.sp & 0xFF) as u8);
                         self.memory
                             .set(source.wrapping_add(1), ((self.regs.sp & 0xFF00) >> 8) as u8)
@@ -88,6 +87,17 @@ impl Cpu {
                         self.regs.set_hl(self.regs.get_hl().wrapping_sub(1));
                         out
                     }
+                    AddressSource::Immediate => {
+                        let lsb = self.load_ahead(1) as u16;
+                        let msb = self.load_ahead(2) as u16;
+                        let source = (msb << 8) | lsb;
+
+                        let value = self.memory.load(source).unwrap();
+
+                        // hehe short circuit
+                        self.regs.a = value;
+                        return 3;
+                    }
                 };
 
                 return 1;
@@ -106,13 +116,21 @@ impl Cpu {
                         self.set_from_hl(value);
                         self.regs.set_hl(self.regs.get_hl().wrapping_sub(1));
                     }
+                    AddressSource::Immediate => {
+                        let lsb = self.load_ahead(1) as u16;
+                        let msb = self.load_ahead(2) as u16;
+                        let addr = (msb << 8) | lsb;
+
+                        self.memory.set(addr, value);
+                        return 3;
+                    }
                 };
 
                 return 1;
             }
             LoadType::ByteAddressIntoA(source) => {
                 self.regs.a = match source {
-                    ByteAddressSource::A8 => {
+                    ByteAddressSource::Immediate => {
                         self.memory
                             .load(0xFF00 + self.load_ahead(1) as u16)
                             .unwrap();
@@ -127,7 +145,7 @@ impl Cpu {
                 let value = self.regs.a;
 
                 match target {
-                    ByteAddressSource::A8 => {
+                    ByteAddressSource::Immediate => {
                         self.memory.set(0xFF00 + self.load_ahead(1) as u16, value);
                         return 2;
                     }
@@ -135,6 +153,14 @@ impl Cpu {
                 };
 
                 return 1;
+            }
+            LoadType::SPOffset => {
+                let offset = self.load_ahead(1) as i8;
+                let value = self.regs.sp + (offset as u16);
+
+                self.regs.set_hl(value);
+
+                return 2;
             }
         }
     }
