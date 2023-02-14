@@ -249,12 +249,6 @@ pub enum Instruction {
     ///
     /// ### Flag States
     /// - No flags are affected
-    POP(StackTarget),
-    STOP,
-    /// - The `zero` flag is set if the output is `0`
-    /// - The `subtract` flag is unaffected
-    /// - The `half carry` flag is reset to `0`
-    /// - The `carry` flag remains the same
     DAA,
     // ---------- 16 bit ----------
     /// Adds target to HL and stores the result in HL
@@ -267,6 +261,8 @@ pub enum Instruction {
     ADDHL(WordArithmeticTarget),
     /// Increments target pair by 1
     INCW(WordArithmeticTarget),
+    /// Decrements target pair by 1
+    DECW(WordArithmeticTarget),
     /// Adds target to SP and stores the result in SP
     ///
     /// - The `zero` flag is set if the output is `0`
@@ -274,16 +270,6 @@ pub enum Instruction {
     /// - The `half carry` flag is set if bit 3 overflows into bit 4
     /// - The `carry` flag is set if the output wraps around `65535` to `0`
     ADDSP(i8),
-    /// Increments target pair by 1
-    ///
-    /// ### Flag States
-    /// - No flags are affected
-    INCW(WordArithmeticTarget),
-    /// Decrements target pair by 1
-    ///
-    /// ### Flag States
-    /// - No flags are affected
-    DECW(WordArithmeticTarget),
 }
 
 #[derive(Clone, Copy, Debug)]
