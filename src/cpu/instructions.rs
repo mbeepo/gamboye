@@ -86,11 +86,6 @@ pub enum Instruction {
     /// - The `half carry` flag is set if a bit was carried from bit 3 to bit 4
     /// - The `carry` flag is set if the output wraps around `255` to `0`
     INC(ArithmeticTarget),
-    /// Increments target pair by 1
-    ///
-    /// ### Flag States
-    /// - No flags are affected
-    INCW(WordArithmeticTarget),
     /// Decrements target by 1
     ///
     /// ### Flag States
@@ -164,14 +159,8 @@ pub enum Instruction {
     /// - The `carry` flag is unaffected
     BIT(ArithmeticTarget, u8),
     /// Reset the selected bit to 0
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     RES(ArithmeticTarget, u8),
     /// Set the selected bit to 1
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     SET(ArithmeticTarget, u8),
     /// Shifts the selected register right, putting bit 0 in the carry flag and resetting bit 7 to `0`
     ///
@@ -238,35 +227,32 @@ pub enum Instruction {
     /// - The `carry` flag is reset to `0`
     SWAP(ArithmeticTarget),
     /// Jumps to the address contained in the next two bytes if JumpTest succeeds
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     JP(JumpTest),
     /// Jumps by a number of addresses as specified by the next byte
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     JR(JumpTest),
     /// Jumps to the address stored in HL
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     JPHL,
     /// Loads data from one place to another
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     LD(LoadType),
     /// Pushes a word to the stack
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     PUSH(StackTarget),
     /// Pops a word from the stack
+    POP(StackTarget),
+    /// Stops the CPU
+    STOP,
+    /// Halts the CPU
+    HALT,
+    /// Adjusts A back to BCD after a BCD arithmetic operation
+    ///
+    /// ### Input States
+    /// - If the `carry` flag is set, 0x60 will be added to A even if its first nibble is less than 0xA
     ///
     /// ### Flag States
-    /// - No flags are affected
-    POP(StackTarget),
+    /// - The `zero` flag is set if the output is `0`
+    /// - The `subtract` flag is unaffected
+    /// - The `half carry` flag is reset to `0`
+    /// - The `carry` flag remains the same
+    DAA,
     // ---------- 16 bit ----------
     /// Adds target to HL and stores the result in HL
     ///
@@ -276,6 +262,8 @@ pub enum Instruction {
     /// - The `half carry` flag is set if bit 3 overflows into bit 4
     /// - The `carry` flag is set if the output wraps around `65535` to `0`
     ADDHL(WordArithmeticTarget),
+    /// Increments target pair by 1
+    INCW(WordArithmeticTarget),
     /// Adds target to SP and stores the result in SP
     ///
     /// - The `zero` flag is set if the output is `0`
@@ -295,7 +283,7 @@ pub enum ArithmeticTarget {
     H,
     L,
     HL,
-    D8,
+    Immediate,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -324,6 +312,7 @@ pub enum LoadType {
     // The address used starts from 0xFF00, the last byte of address space
     ByteAddressIntoA(ByteAddressSource),
     ByteAddressFromA(ByteAddressSource),
+    SPOffset,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -336,7 +325,7 @@ pub enum ByteSource {
     H,
     L,
     HL,
-    D8,
+    Immediate,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -359,7 +348,7 @@ pub enum WordTarget {
     HLFromSP,
     SP,
     SPFromHL,
-    A16,
+    Immediate,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -368,11 +357,12 @@ pub enum AddressSource {
     DE,
     HLUp,
     HLDown,
+    Immediate,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum ByteAddressSource {
-    A8,
+    Immediate,
     C,
 }
 

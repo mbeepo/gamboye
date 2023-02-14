@@ -162,7 +162,7 @@ impl Cpu {
         out
     }
 
-    /// Converts A to a two digit binary coded decimal number
+    /// Adjusts A back to BCD after a BCD arithmetic operation
     ///
     /// ### Input States
     /// - If the `carry` flag is set, 0x60 will be added to A even if its first nibble is less than 0xA
@@ -172,7 +172,7 @@ impl Cpu {
     /// - The `subtract` flag is unaffected
     /// - The `half carry` flag is reset to `0`
     /// - The `carry` flag remains the same
-    pub fn daa(&mut self) {
+    pub fn daa(&mut self) -> u8 {
         let mut a = self.regs.a;
 
         if !self.regs.get_nf() {
@@ -196,9 +196,9 @@ impl Cpu {
             }
         }
 
-        self.regs.a = a;
         self.regs.set_zf(a == 0);
         self.regs.set_hf(false);
+        a
     }
 
     // ---------- 16 bit ----------

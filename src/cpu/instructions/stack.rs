@@ -4,9 +4,6 @@ use super::StackTarget;
 
 impl Cpu {
     /// Pushes a word to the stack
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     pub(crate) fn push(&mut self, source: StackTarget) {
         let value = match source {
             StackTarget::BC => self.regs.get_bc(),
@@ -27,9 +24,6 @@ impl Cpu {
     }
 
     /// Pops a word from the stack
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     pub(crate) fn pop(&mut self, target: StackTarget) {
         let lsb = self.memory.load(self.regs.sp).unwrap() as u16;
         let msb = self.memory.load(self.regs.sp.wrapping_add(1)).unwrap() as u16;

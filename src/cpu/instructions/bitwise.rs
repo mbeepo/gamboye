@@ -137,9 +137,6 @@ impl Cpu {
     }
 
     /// Resets the selected bit to `0`
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     pub(crate) fn res(&self, byte: u8, idx: u8) -> u8 {
         if idx > 7 {
             panic!("[RES] Bit target `{idx}` out of range");
@@ -149,9 +146,6 @@ impl Cpu {
     }
 
     /// Sets the selected bit to `1`
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     pub(crate) fn set(&self, byte: u8, idx: u8) -> u8 {
         if idx > 7 {
             panic!("[SET] Bit target `{idx}` out of range");
