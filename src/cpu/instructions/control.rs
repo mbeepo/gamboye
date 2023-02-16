@@ -4,7 +4,7 @@ use super::JumpTest;
 
 impl Cpu {
     /// Jumps to the address contained in the next two bytes if JumpTest succeeds
-    pub(crate) fn jp(&self, test: JumpTest) -> u16 {
+    pub(crate) fn jp(&mut self, test: JumpTest) -> u16 {
         let jump = match test {
             JumpTest::NotZero => !self.regs.get_zf(),
             JumpTest::Zero => self.regs.get_zf(),
@@ -14,17 +14,14 @@ impl Cpu {
         };
 
         if jump {
-            let lsb = self.load_ahead(1) as u16;
-            let msb = self.load_ahead(2) as u16;
-
-            (msb << 8) | lsb
+            self.load_a16()
         } else {
             self.regs.pc.wrapping_add(3)
         }
     }
 
     /// Jumps by a number of addresses as specified by the next byte
-    pub(crate) fn jr(&self, test: JumpTest) -> u16 {
+    pub(crate) fn jr(&mut self, test: JumpTest) -> u16 {
         let jump = match test {
             JumpTest::NotZero => !self.regs.get_zf(),
             JumpTest::Zero => self.regs.get_zf(),
@@ -36,9 +33,9 @@ impl Cpu {
         if jump {
             // Casting to u16 from i8 instead of u8 uses sign extension
             // This effectively allows subtraction
-            let rel = self.load_ahead(1) as i8 as u16;
+            let rel = self.load_s8();
 
-            self.regs.pc.wrapping_add(rel)
+            self.regs.pc.wrapping_add(rel as u16)
         } else {
             self.regs.pc.wrapping_add(3)
         }
@@ -47,6 +44,71 @@ impl Cpu {
     /// Jumps to the address stored in HL
     pub(crate) fn jphl(&self) -> u16 {
         self.regs.pc.wrapping_add(self.regs.get_hl())
+    }
+
+    /// Jumps to the address stored at the head of the stack
+    pub(crate) fn ret(&mut self, test: JumpTest) -> u16 {
+        let jump = match test {
+            JumpTest::NotZero => !self.regs.get_zf(),
+            JumpTest::Zero => self.regs.get_zf(),
+            JumpTest::NotCarry => !self.regs.get_cf(),
+            JumpTest::Carry => self.regs.get_cf(),
+            JumpTest::Always => true,
+        };
+
+        if jump {
+            self.pop_word()
+        } else {
+            self.regs.pc.wrapping_add(1)
+        }
+    }
+
+    /// Jumps to the address stored in the stack, and sets IME to 1
+    pub(crate) fn reti(&mut self) -> u16 {
+        self.regs.ime = true;
+
+        self.pop_word()
+    }
+
+    /// Pushes PC to the stack and jumps to an immediate address
+    pub(crate) fn call(&mut self, test: JumpTest) -> u16 {
+        let jump = match test {
+            JumpTest::NotZero => !self.regs.get_zf(),
+            JumpTest::Zero => self.regs.get_zf(),
+            JumpTest::NotCarry => !self.regs.get_cf(),
+            JumpTest::Carry => self.regs.get_cf(),
+            JumpTest::Always => true,
+        };
+
+        if jump {
+            self.push_word(self.regs.pc);
+            self.load_a16()
+        } else {
+            self.regs.pc.wrapping_add(3)
+        }
+    }
+
+    /// Pushes PC to the stack and jumps to the nth byte of page 0 (0x00, 0x01... 0x07)
+    /// Will panic if operand is not within 0..=7
+    pub(crate) fn rst(&mut self, to: u8) -> u16 {
+        if to > 7 {
+            panic!("RST operand out of range: `{to}`. Valid range is 0..=7");
+        }
+
+        self.push_word(self.regs.pc);
+
+        // We're jumping to the nth byte, so we can just use it as an address directly
+        to as u16
+    }
+
+    /// Reset IME to `0`
+    pub(crate) fn di(&mut self) {
+        self.regs.ime = false;
+    }
+
+    /// Set IME to `1`
+    pub(crate) fn ei(&mut self) {
+        self.regs.ime = true;
     }
 }
 

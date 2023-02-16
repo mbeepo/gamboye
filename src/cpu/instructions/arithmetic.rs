@@ -1,4 +1,4 @@
-use crate::{cpu::Cpu, memory::mbc::Mbc};
+use crate::cpu::Cpu;
 
 /// CPU instructions in the Arithmetic Group. These implementations set all relevant flags
 impl Cpu {
@@ -51,7 +51,7 @@ impl Cpu {
         self.regs.set_hf(false);
         self.regs.set_cf(carry);
 
-        // From Mooneye's DMG emulator, pretty sure this will never be true but keeping it so I can explain this
+        // from Mooneye's DMG emulator, pretty sure this will never be true but keeping it so I can explain this
         // self.regs.set_hf((self.regs.a & 0xf).wrapping_sub(value & 0xf) & (0x10) != 0);
 
         out
@@ -244,14 +244,8 @@ impl Cpu {
 #[cfg(test)]
 mod tests {
     use crate::{
-        cpu::{
-            instructions::WordArithmeticTarget, registers::Registers, ArithmeticTarget, Cpu,
-            Instruction,
-        },
-        memory::{
-            mbc::{MbcKind, NoMbc},
-            Mmu,
-        },
+        cpu::{instructions::WordArithmeticTarget, ArithmeticTarget, Cpu, Instruction},
+        memory::{mbc::MbcKind, Mmu},
     };
 
     fn init() -> Cpu {

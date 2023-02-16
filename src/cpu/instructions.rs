@@ -246,10 +246,22 @@ pub enum Instruction {
     ///
     /// ### Input States
     /// - If the `carry` flag is set, 0x60 will be added to A even if its first nibble is less than 0xA
-    ///
-    /// ### Flag States
-    /// - No flags are affected
     DAA,
+    /// Does nothing, just passes the cycle
+    NOP,
+    /// Jumps to the address stored in the stack
+    RET(JumpTest),
+    /// Jumps to the address stored in the stack, and sets IME to 1
+    RETI,
+    /// Pushes PC to the stack and jumps to an immediate address
+    CALL(JumpTest),
+    /// Pushes PC to the stack and jumps to the nth byte of page 0 (0x00, 0x01... 0x07)
+    /// Will panic if operand is not within 0..=7
+    RST(u8),
+    /// Reset IME to `0`
+    DI,
+    /// Set IME to `1`
+    EI,
     // ---------- 16 bit ----------
     /// Adds target to HL and stores the result in HL
     ///
@@ -269,7 +281,7 @@ pub enum Instruction {
     /// - The `subtract` flag is reset to `0`
     /// - The `half carry` flag is set if bit 3 overflows into bit 4
     /// - The `carry` flag is set if the output wraps around `65535` to `0`
-    ADDSP(i8),
+    ADDSP,
 }
 
 #[derive(Clone, Copy, Debug)]

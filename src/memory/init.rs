@@ -32,7 +32,7 @@ pub fn init_io() -> [Option<u8>; 0x80] {
 
     let mut memory: [Option<u8>; 0x80] = [None; 0x80];
 
-    // Go through initial memory, outputting None for bytes with their corresponding bits set to `0`
+    // Go through initial memory, outputting None for bytes with their mask set to `0`
     // Do it in 4 groups, since the mask is broken into 4 `u32`s
     for i in 0..4 {
         let map = init_mask[i];
@@ -41,7 +41,7 @@ pub fn init_io() -> [Option<u8>; 0x80] {
             // Get the current byte address within IO memory
             let mem_addr = bit + i * 32;
 
-            // This translates the bit index (0-32) to a mask, starting from the left side (MSB)
+            // This translates the bit index (0-32) to a mask, starting from the left side (high)
             if map & (1 << 31 - bit) > 0 {
                 memory[mem_addr] = Some(initial[mem_addr]);
             } else {

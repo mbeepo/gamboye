@@ -16,7 +16,7 @@ impl Cpu {
                     ByteSource::H => self.regs.h,
                     ByteSource::L => self.regs.l,
                     ByteSource::HL => self.load_from_hl(),
-                    ByteSource::Immediate => self.load_ahead(1),
+                    ByteSource::Immediate => self.load_d8(),
                 };
 
                 match target {
@@ -38,8 +38,8 @@ impl Cpu {
             LoadType::Word(target) => {
                 match target {
                     WordTarget::HLFromSP => {
-                        self.regs
-                            .set_hl(self.regs.sp.wrapping_add(self.load_ahead(1) as i8 as u16));
+                        let immediate = self.load_s8() as u16;
+                        self.regs.set_hl(self.regs.sp.wrapping_add(immediate));
                         return 2;
                     }
                     WordTarget::SPFromHL => {
@@ -49,9 +49,7 @@ impl Cpu {
                     _ => {}
                 }
 
-                let lsb = self.load_ahead(1) as u16;
-                let msb = self.load_ahead(2) as u16;
-                let source = (msb << 8) | lsb;
+                let source = self.load_a16();
 
                 match target {
                     WordTarget::BC => self.regs.set_bc(source),
@@ -65,7 +63,7 @@ impl Cpu {
                         unreachable!("Returned before the 16 bit immediate was read")
                     }
                     WordTarget::Immediate => {
-                        self.memory.set(source, (self.regs.sp & 0xFF) as u8);
+                        self.mem_set(source, (self.regs.sp & 0xFF) as u8);
                         self.memory
                             .set(source.wrapping_add(1), ((self.regs.sp & 0xFF00) >> 8) as u8)
                     }
@@ -75,8 +73,8 @@ impl Cpu {
             }
             LoadType::IndirectIntoA(source) => {
                 self.regs.a = match source {
-                    AddressSource::BC => self.memory.load(self.regs.get_bc()).unwrap(),
-                    AddressSource::DE => self.memory.load(self.regs.get_de()).unwrap(),
+                    AddressSource::BC => self.mem_load(self.regs.get_bc()),
+                    AddressSource::DE => self.mem_load(self.regs.get_de()),
                     AddressSource::HLUp => {
                         let out = self.load_from_hl();
                         self.regs.set_hl(self.regs.get_hl().wrapping_add(1));
@@ -88,11 +86,9 @@ impl Cpu {
                         out
                     }
                     AddressSource::Immediate => {
-                        let lsb = self.load_ahead(1) as u16;
-                        let msb = self.load_ahead(2) as u16;
-                        let source = (msb << 8) | lsb;
+                        let source = self.load_a16();
 
-                        let value = self.memory.load(source).unwrap();
+                        let value = self.mem_load(source);
 
                         // hehe short circuit
                         self.regs.a = value;
@@ -106,8 +102,8 @@ impl Cpu {
                 let value = self.regs.a;
 
                 match target {
-                    AddressSource::BC => self.memory.set(self.regs.get_bc(), value),
-                    AddressSource::DE => self.memory.set(self.regs.get_de(), value),
+                    AddressSource::BC => self.mem_set(self.regs.get_bc(), value),
+                    AddressSource::DE => self.mem_set(self.regs.get_de(), value),
                     AddressSource::HLUp => {
                         self.set_from_hl(value);
                         self.regs.set_hl(self.regs.get_hl().wrapping_add(1));
@@ -117,11 +113,9 @@ impl Cpu {
                         self.regs.set_hl(self.regs.get_hl().wrapping_sub(1));
                     }
                     AddressSource::Immediate => {
-                        let lsb = self.load_ahead(1) as u16;
-                        let msb = self.load_ahead(2) as u16;
-                        let addr = (msb << 8) | lsb;
+                        let addr = self.load_a16();
 
-                        self.memory.set(addr, value);
+                        self.mem_set(addr, value);
                         return 3;
                     }
                 };
@@ -131,12 +125,11 @@ impl Cpu {
             LoadType::ByteAddressIntoA(source) => {
                 self.regs.a = match source {
                     ByteAddressSource::Immediate => {
-                        self.memory
-                            .load(0xFF00 + self.load_ahead(1) as u16)
-                            .unwrap();
+                        let immediate = self.load_d8();
+                        self.memory.load(0xFF00 + immediate as u16).unwrap();
                         return 2;
                     }
-                    ByteAddressSource::C => self.memory.load(0xFF00 + self.regs.c as u16).unwrap(),
+                    ByteAddressSource::C => self.mem_load(0xFF00 + self.regs.c as u16),
                 };
 
                 return 1;
@@ -146,16 +139,17 @@ impl Cpu {
 
                 match target {
                     ByteAddressSource::Immediate => {
-                        self.memory.set(0xFF00 + self.load_ahead(1) as u16, value);
+                        let immediate = self.load_d8();
+                        self.mem_set(0xFF00 + immediate as u16, value);
                         return 2;
                     }
-                    ByteAddressSource::C => self.memory.set(0xFF00 + self.regs.c as u16, value),
+                    ByteAddressSource::C => self.mem_set(0xFF00 + self.regs.c as u16, value),
                 };
 
                 return 1;
             }
             LoadType::SPOffset => {
-                let offset = self.load_ahead(1) as i8;
+                let offset = self.load_s8();
                 let value = self.regs.sp + (offset as u16);
 
                 self.regs.set_hl(value);

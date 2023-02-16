@@ -1,8 +1,8 @@
 use gbc::Gbc;
 
 fn main() {
-    let e = 0b1010_1010;
-    let r: u8 = e << 1;
+    let e = (1000.0 / 4.194304) as u128;
+    let r = (1000.0 / 8.388608) as u128;
 
-    println!("{e:#010b}\n{r:#010b}");
+    println!("{e}\n{r}");
 }

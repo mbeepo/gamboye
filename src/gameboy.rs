@@ -14,4 +14,9 @@ impl Gbc {
 
         Self { cpu }
     }
+
+    /// Entry point for the emulator
+    pub fn start(&mut self) {
+        self.cpu.main_loop();
+    }
 }

@@ -1,42 +1,34 @@
 use crate::cpu::Cpu;
 
-use super::StackTarget;
-
 impl Cpu {
-    /// Pushes a word to the stack
-    pub(crate) fn push(&mut self, source: StackTarget) {
-        let value = match source {
-            StackTarget::BC => self.regs.get_bc(),
-            StackTarget::DE => self.regs.get_de(),
-            StackTarget::HL => self.regs.get_hl(),
-            StackTarget::AF => self.regs.get_af(),
-        };
+    /// Pops a word from the stack
+    pub(crate) fn pop_word(&mut self) -> u16 {
+        let low = self.pop() as u16;
+        let high = self.pop() as u16;
+        let value = (high << 8) | low;
 
-        let msb_addr = self.regs.sp - 1;
-        let lsb_addr = self.regs.sp - 2;
-
-        let msb = ((value & 0xFF00) >> 8) as u8;
-        let lsb = (value & 0xFF) as u8;
-
-        self.memory.set(msb_addr, msb);
-        self.memory.set(lsb_addr, lsb);
-        self.regs.sp -= 2;
+        value
     }
 
-    /// Pops a word from the stack
-    pub(crate) fn pop(&mut self, target: StackTarget) {
-        let lsb = self.memory.load(self.regs.sp).unwrap() as u16;
-        let msb = self.memory.load(self.regs.sp.wrapping_add(1)).unwrap() as u16;
-        let value = (msb << 8) | lsb;
+    /// Pushes a word to the stack
+    pub(crate) fn push_word(&mut self, value: u16) {
+        let high = ((value & 0xFF00) >> 8) as u8;
+        let low = (value & 0xFF) as u8;
 
-        match target {
-            StackTarget::BC => self.regs.set_bc(value),
-            StackTarget::DE => self.regs.set_de(value),
-            StackTarget::HL => self.regs.set_hl(value),
-            StackTarget::AF => self.regs.set_af(value),
-        }
+        self.push(high);
+        self.push(low);
+    }
 
-        self.regs.sp = self.regs.sp.wrapping_add(2);
+    pub(crate) fn pop(&mut self) -> u8 {
+        let out = self.mem_load(self.regs.sp);
+        self.regs.sp.wrapping_add(1);
+
+        out
+    }
+
+    pub(crate) fn push(&mut self, value: u8) {
+        self.mem_set(self.regs.sp, value);
+        self.regs.sp.wrapping_sub(1);
     }
 }
 
