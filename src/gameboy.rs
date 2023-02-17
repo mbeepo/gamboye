@@ -1,6 +1,6 @@
 use crate::{
     cpu::Cpu,
-    memory::{mbc::MbcKind, Mmu},
+    memory::{mbc::MbcSelector, Mmu},
 };
 
 pub struct Gbc {
@@ -9,7 +9,7 @@ pub struct Gbc {
 
 impl Gbc {
     pub fn new() -> Self {
-        let memory = Mmu::new(MbcKind::NoMbc);
+        let memory = Mmu::new(MbcSelector::NoMbc);
         let cpu = Cpu::new(memory);
 
         Self { cpu }

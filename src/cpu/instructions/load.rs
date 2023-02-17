@@ -164,11 +164,11 @@ impl Cpu {
 mod tests {
     use crate::{
         cpu::Cpu,
-        memory::{mbc::MbcKind, Mmu},
+        memory::{mbc::MbcSelector, Mmu},
     };
 
     fn init() -> Cpu {
-        let mmu = Mmu::new(MbcKind::NoMbc);
+        let mmu = Mmu::new(MbcSelector::NoMbc);
 
         Cpu::new(mmu)
     }

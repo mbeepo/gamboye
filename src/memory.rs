@@ -3,7 +3,7 @@ use std::ops::Range;
 use self::{
     bank::{VramBank, WramBank},
     init::init_io,
-    mbc::{Mbc, MbcKind, MbcLike, NoMbc},
+    mbc::{init_mbc, Mbc, MbcKind, MbcSelector, NoMbc},
 };
 
 mod bank;
@@ -25,11 +25,10 @@ pub(crate) enum MmuAddr {
 /// Memory management unit
 ///
 /// The main interfaces of this structure are `Mmu::get()` and `Mmu::set()`
-#[derive(Clone, Copy)]
 pub struct Mmu {
     // 0000 - 7FFF
     // A000 - BFFF
-    mbc: Mbc, // memory bank controller, for external switchable memory banks
+    mbc: Box<dyn Mbc>, // memory bank controller, for external switchable memory banks
     // 8000 - 9FFF
     vram: VramBank, // video ram banks, only the first will be used for dmg, but either can be used for cgb
     // C000 - CFFF
@@ -48,10 +47,8 @@ pub struct Mmu {
 }
 
 impl Mmu {
-    pub fn new(mbc_kind: MbcKind) -> Self {
-        let mbc = match mbc_kind {
-            MbcKind::NoMbc => Mbc::NoMbc(NoMbc::new()),
-        };
+    pub fn new(mbc_kind: MbcSelector) -> Self {
+        let mbc = Box::new(init_mbc(mbc_kind));
 
         Self {
             mbc,
@@ -138,6 +135,10 @@ impl Mmu {
         }
     }
 
+    pub fn load_cart(&mut self, data: &[u8]) {
+        self.mbc.load_cart(data);
+    }
+
     /// Sets the cell at address `addr` to the value stored in `value`
     ///
     /// ### Side Effects
@@ -175,12 +176,12 @@ impl Mmu {
 #[cfg(test)]
 mod tests {
     use super::{
-        mbc::{MbcKind, NoMbc},
+        mbc::{MbcSelector, NoMbc},
         Mmu, MmuAddr,
     };
 
     fn init_nombc() -> Mmu {
-        Mmu::new(MbcKind::NoMbc)
+        Mmu::new(MbcSelector::NoMbc)
     }
 
     #[test]

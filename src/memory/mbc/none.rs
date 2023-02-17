@@ -1,24 +1,18 @@
-use super::{Mbc, MbcLike};
+use super::{Mbc, MbcAddr};
 
 #[derive(Clone, Copy)]
 pub struct NoMbc {
-    rom: [Option<u8>; 0x8000],
-    ram: [Option<u8>; 0x2000],
+    pub(crate) rom: [Option<u8>; 0x8000],
+    pub(crate) ram: [Option<u8>; 0x2000],
 }
 
-#[derive(Clone, Copy)]
-enum NoMbcAddr {
-    Rom(u16),
-    Ram(u16),
-}
-
-impl MbcLike for NoMbc {
+impl Mbc for NoMbc {
     fn load(&self, addr: u16) -> Option<u8> {
         let addr = self.translate(addr);
 
         match addr {
-            NoMbcAddr::Rom(a) => self.rom[a as usize],
-            NoMbcAddr::Ram(a) => self.ram[a as usize],
+            MbcAddr::Rom(a) => self.rom[a as usize],
+            MbcAddr::Ram(a) => self.ram[a as usize],
         }
     }
 
@@ -26,31 +20,22 @@ impl MbcLike for NoMbc {
         let addr = self.translate(addr);
 
         match addr {
-            NoMbcAddr::Rom(a) => self.rom[a as usize] = Some(value),
-            NoMbcAddr::Ram(a) => self.ram[a as usize] = Some(value),
-        }
-    }
-}
-
-impl NoMbc {
-    pub fn new() -> Self {
-        Self {
-            rom: [None; 0x8000],
-            ram: [None; 0x2000],
+            MbcAddr::Rom(a) => self.rom[a as usize] = Some(value),
+            MbcAddr::Ram(a) => self.ram[a as usize] = Some(value),
         }
     }
 
-    fn translate(&self, addr: u16) -> NoMbcAddr {
+    fn translate(&self, addr: u16) -> MbcAddr {
         if addr < 0x8000 {
             // 0000 - 7FFF
             // ROM
-            NoMbcAddr::Rom(addr)
+            MbcAddr::Rom(addr)
         } else if addr >= 0xA000 && addr < 0xC000 {
             // A000 - BFFF
             // RAM
             let addr = addr - 0xA000;
 
-            NoMbcAddr::Ram(addr)
+            MbcAddr::Ram(addr)
         } else {
             panic!("Invalid memory translation: ${addr:#06x}");
         }

@@ -256,7 +256,9 @@ pub enum Instruction {
     /// Pushes PC to the stack and jumps to an immediate address
     CALL(JumpTest),
     /// Pushes PC to the stack and jumps to the nth byte of page 0 (0x00, 0x01... 0x07)
-    /// Will panic if operand is not within 0..=7
+    ///
+    /// ### Panic Conditions
+    /// - Will panic if operand is not within 0..=7
     RST(u8),
     /// Reset IME to `0`
     DI,

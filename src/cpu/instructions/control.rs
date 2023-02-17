@@ -89,6 +89,8 @@ impl Cpu {
     }
 
     /// Pushes PC to the stack and jumps to the nth byte of page 0 (0x00, 0x01... 0x07)
+    ///
+    /// ### Panic Conditions
     /// Will panic if operand is not within 0..=7
     pub(crate) fn rst(&mut self, to: u8) -> u16 {
         if to > 7 {
@@ -116,11 +118,11 @@ impl Cpu {
 mod tests {
     use crate::{
         cpu::Cpu,
-        memory::{mbc::MbcKind, Mmu},
+        memory::{mbc::MbcSelector, Mmu},
     };
 
     fn init() -> Cpu {
-        let mmu = Mmu::new(MbcKind::NoMbc);
+        let mmu = Mmu::new(MbcSelector::NoMbc);
 
         Cpu::new(mmu)
     }

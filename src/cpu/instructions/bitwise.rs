@@ -1,4 +1,4 @@
-use crate::{cpu::Cpu, memory::mbc::Mbc};
+use crate::{cpu::Cpu, memory::mbc::MbcKind};
 
 use super::JumpTest;
 
@@ -320,13 +320,13 @@ mod tests {
             Cpu,
         },
         memory::{
-            mbc::{MbcKind, NoMbc},
+            mbc::{MbcSelector, NoMbc},
             Mmu,
         },
     };
 
     fn init() -> Cpu {
-        let mmu = Mmu::new(MbcKind::NoMbc);
+        let mmu = Mmu::new(MbcSelector::NoMbc);
 
         Cpu::new(mmu)
     }

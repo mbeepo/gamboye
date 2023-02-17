@@ -58,6 +58,10 @@ impl Cpu {
         }
     }
 
+    pub(crate) fn load_cart(&mut self, data: &[u8]) {
+        self.memory.load_cart(data);
+    }
+
     /// Ticks the system by 1 M-cycle, handling interrupts and stepping the PPU
     pub(crate) fn tick(&mut self) {}
 
@@ -330,7 +334,9 @@ impl Cpu {
     }
 
     /// Loads a byte from memory and ticks an M-cycle
-    /// Panics if the address is uninitialized
+    ///
+    /// ### Panic Conditions
+    /// - Panics if the address is uninitialized
     fn mem_load(&mut self, addr: u16) -> u8 {
         self.tick();
         self.memory.load(addr).unwrap()
