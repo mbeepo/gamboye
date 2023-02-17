@@ -123,16 +123,20 @@ impl Cpu {
                 return 1;
             }
             LoadType::ByteAddressIntoA(source) => {
-                self.regs.a = match source {
+                let len: u16;
+
+                (self.regs.a, len) = match source {
                     ByteAddressSource::Immediate => {
                         let immediate = self.load_d8();
-                        self.memory.load(0xFF00 + immediate as u16).unwrap();
-                        return 2;
+
+                        dbg!(immediate);
+
+                        (self.mem_load(0xFF00 + immediate as u16), 2)
                     }
-                    ByteAddressSource::C => self.mem_load(0xFF00 + self.regs.c as u16),
+                    ByteAddressSource::C => (self.mem_load(0xFF00 + self.regs.c as u16), 1),
                 };
 
-                return 1;
+                return len;
             }
             LoadType::ByteAddressFromA(target) => {
                 let value = self.regs.a;
@@ -165,12 +169,14 @@ mod tests {
     use crate::{
         cpu::Cpu,
         memory::{mbc::MbcSelector, Mmu},
+        ppu::Ppu,
     };
 
     fn init() -> Cpu {
         let mmu = Mmu::new(MbcSelector::NoMbc);
+        let ppu = Ppu::new_headless();
 
-        Cpu::new(mmu)
+        Cpu::new(mmu, ppu)
     }
 
     #[test]

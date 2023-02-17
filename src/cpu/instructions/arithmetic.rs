@@ -246,12 +246,14 @@ mod tests {
     use crate::{
         cpu::{instructions::WordArithmeticTarget, ArithmeticTarget, Cpu, Instruction},
         memory::{mbc::MbcSelector, Mmu},
+        ppu::Ppu,
     };
 
     fn init() -> Cpu {
         let mmu = Mmu::new(MbcSelector::NoMbc);
+        let ppu = Ppu::new_headless();
 
-        Cpu::new(mmu)
+        Cpu::new(mmu, ppu)
     }
 
     // ---------- 8 bit ----------

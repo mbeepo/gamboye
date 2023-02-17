@@ -29,11 +29,11 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    pub fn new(memory: Mmu) -> Self {
+    pub fn new(memory: Mmu, ppu: Ppu) -> Self {
         Self {
             regs: Registers::new(),
             memory,
-            ppu: Ppu::new(),
+            ppu,
             double_speed: false,
             tick_duration: NORMAL_TICK_DURATION,
             last_tick: Instant::now(),

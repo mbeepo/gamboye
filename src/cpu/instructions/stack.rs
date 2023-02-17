@@ -21,14 +21,14 @@ impl Cpu {
 
     pub(crate) fn pop(&mut self) -> u8 {
         let out = self.mem_load(self.regs.sp);
-        self.regs.sp.wrapping_add(1);
+        self.regs.sp = self.regs.sp.wrapping_add(1);
 
         out
     }
 
     pub(crate) fn push(&mut self, value: u8) {
+        self.regs.sp = self.regs.sp.wrapping_sub(1);
         self.mem_set(self.regs.sp, value);
-        self.regs.sp.wrapping_sub(1);
     }
 }
 
@@ -37,12 +37,14 @@ mod tests {
     use crate::{
         cpu::Cpu,
         memory::{mbc::MbcSelector, Mmu},
+        ppu::Ppu,
     };
 
     fn init() -> Cpu {
         let mmu = Mmu::new(MbcSelector::NoMbc);
+        let ppu = Ppu::new_headless();
 
-        Cpu::new(mmu)
+        Cpu::new(mmu, ppu)
     }
 
     #[test]
@@ -77,6 +79,7 @@ mod tests {
 
         // POP
         cpu.step();
+
         assert_eq!(cpu.regs.get_bc(), 0x4560);
 
         cpu.step();

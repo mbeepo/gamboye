@@ -323,12 +323,14 @@ mod tests {
             mbc::{MbcSelector, NoMbc},
             Mmu,
         },
+        ppu::Ppu,
     };
 
     fn init() -> Cpu {
         let mmu = Mmu::new(MbcSelector::NoMbc);
+        let ppu = Ppu::new_headless();
 
-        Cpu::new(mmu)
+        Cpu::new(mmu, ppu)
     }
 
     #[test]
