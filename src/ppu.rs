@@ -1,5 +1,7 @@
 use minifb::{Window, WindowOptions};
 
+use crate::Mmu;
+
 pub struct Ppu {
     window: Option<Window>,
 }
@@ -19,4 +21,6 @@ impl Ppu {
     pub fn new_headless() -> Self {
         Self { window: None }
     }
+
+    pub fn render(&mut self, memory: Mmu) {}
 }

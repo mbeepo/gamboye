@@ -1,9 +1,7 @@
-use std::ops::Range;
-
 use self::{
     bank::{VramBank, WramBank},
     init::init_io,
-    mbc::{init_mbc, Mbc, MbcKind, MbcSelector, NoMbc},
+    mbc::{init_mbc, Mbc, MbcSelector},
 };
 
 mod bank;
@@ -171,14 +169,20 @@ impl Mmu {
             self.set(abs, values[rel as usize]);
         }
     }
+
+    /// Returns a block of memory
+    ///
+    /// `start` and `end` are inclusive
+    ///
+    /// Will return `0` for any uninitialized cells
+    pub fn load_block(&mut self, start: u16, end: u16) -> Vec<u8> {
+        (start..=end).map(|i| self.load(i).unwrap_or(0)).collect()
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        mbc::{MbcSelector, NoMbc},
-        Mmu, MmuAddr,
-    };
+    use super::{mbc::MbcSelector, Mmu, MmuAddr};
 
     fn init_nombc() -> Mmu {
         Mmu::new(MbcSelector::NoMbc)
