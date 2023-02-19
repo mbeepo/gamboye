@@ -19,6 +19,7 @@ impl Cpu {
         self.push(low);
     }
 
+    /// Pops a byte from the stack
     pub(crate) fn pop(&mut self) -> u8 {
         let out = self.mem_load(self.regs.sp);
         self.regs.sp = self.regs.sp.wrapping_add(1);
@@ -26,6 +27,7 @@ impl Cpu {
         out
     }
 
+    /// Pushes a byte to the stack
     pub(crate) fn push(&mut self, value: u8) {
         self.regs.sp = self.regs.sp.wrapping_sub(1);
         self.mem_set(self.regs.sp, value);

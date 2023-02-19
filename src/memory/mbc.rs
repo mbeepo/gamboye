@@ -35,8 +35,8 @@ pub trait Mbc {
                     self.set(addr as u16, data[addr]);
                 }
             }
+            // the translate method should have panicked if addr was outside of the entire MBCk
             MbcAddr::Ram(_) => panic!("He ROM too big for he got damn MBC"),
-            // the translate method should have panicked if addr was outside of the entire MBC
         };
     }
 

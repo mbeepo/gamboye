@@ -150,8 +150,8 @@ impl Mmu {
             MmuAddr::Oam(a) => self.oam[a as usize] = Some(value),
             MmuAddr::Prohibited => {}
             MmuAddr::Io(a) => {
+                // WRAM Bank Select
                 if addr == 0xFF70 {
-                    // WRAM Bank Select
                     self.wram.select(value);
                 }
 

@@ -370,12 +370,4 @@ impl Cpu {
     fn load_s8(&mut self) -> i8 {
         self.load_d8() as i8
     }
-
-    fn load_stack(&mut self) -> u8 {
-        self.mem_load(self.regs.sp)
-    }
-
-    fn set_stack(&mut self, value: u8) {
-        self.mem_set(self.regs.sp, value);
-    }
 }
