@@ -124,7 +124,7 @@ mod tests {
 
     fn init() -> Cpu {
         let mmu = Mmu::new(MbcSelector::NoMbc);
-        let ppu = Ppu::new_headless();
+        let ppu = Ppu::new_headless(&mmu);
 
         Cpu::new(mmu, ppu)
     }

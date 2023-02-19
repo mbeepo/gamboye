@@ -26,6 +26,7 @@ pub struct Cpu {
     tick_duration: u128,
     last_tick: Instant,
     halted: bool,
+    last_render: Instant,
 }
 
 impl Cpu {
@@ -38,6 +39,7 @@ impl Cpu {
             tick_duration: NORMAL_TICK_DURATION,
             last_tick: Instant::now(),
             halted: false,
+            last_render: Instant::now(),
         }
     }
 
@@ -52,18 +54,23 @@ impl Cpu {
             }
 
             // normal speed ticks every ~238ns, and double speed ticks every ~119ns
-            // waiting 40ns should get us close without using too much CPU time
+            // waiting 40ns should get us close
             // we sleep even when we step, yes this is intended future bee
             thread::sleep(Duration::from_nanos(40));
         }
     }
 
-    pub(crate) fn load_cart(&mut self, data: &[u8]) {
-        self.memory.load_cart(data);
+    pub(crate) fn load_rom(&mut self, data: &[u8]) {
+        self.memory.load_rom(data);
     }
 
     /// Ticks the system by 1 M-cycle, handling interrupts and stepping the PPU
-    pub(crate) fn tick(&mut self) {}
+    pub(crate) fn tick(&mut self) {
+        // render at 60hz (once every 16.66... ms)
+        if self.last_render.elapsed().as_nanos() >= 16_667 {
+            self.ppu.render(&self.memory);
+        }
+    }
 
     /// Executes a CPU instruction and moves the PC to its next position.
     /// Returns `Some(())` if operation should continue, or `None` if STOP was called and it should stop

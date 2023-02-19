@@ -96,8 +96,10 @@ impl Mmu {
             MmuAddr::Prohibited
         } else if addr < 0xFF80 {
             // FF00 - FF7F
-            // MMIO
-            let addr = addr - 0xFF00;
+            // IO
+            println!("{addr} - {}", 0xFF00);
+            let addr = addr - 0xFEFF;
+            println!("{addr}");
             MmuAddr::Io(addr)
         } else if addr < 0xFFFF {
             // FF80 - FFFE
@@ -133,8 +135,8 @@ impl Mmu {
         }
     }
 
-    pub fn load_cart(&mut self, data: &[u8]) {
-        self.mbc.load_cart(data);
+    pub fn load_rom(&mut self, data: &[u8]) {
+        self.mbc.load_rom(data);
     }
 
     /// Sets the cell at address `addr` to the value stored in `value`
@@ -150,6 +152,11 @@ impl Mmu {
             MmuAddr::Oam(a) => self.oam[a as usize] = Some(value),
             MmuAddr::Prohibited => {}
             MmuAddr::Io(a) => {
+                // Serial transfer control
+                if addr == 0xFF02 && value & 0x80 > 0 {
+                    print!("{}", self.load(0xFF01).unwrap() as char);
+                }
+
                 // WRAM Bank Select
                 if addr == 0xFF70 {
                     self.wram.select(value);

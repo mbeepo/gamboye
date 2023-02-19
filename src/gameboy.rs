@@ -11,10 +11,14 @@ pub struct Gbc {
 impl Gbc {
     pub fn new() -> Self {
         let memory = Mmu::new(MbcSelector::NoMbc);
-        let ppu = Ppu::new();
+        let ppu = Ppu::new_headless(&memory);
         let cpu = Cpu::new(memory, ppu);
 
         Self { cpu }
+    }
+
+    pub fn load_rom(&mut self, data: &[u8]) {
+        self.cpu.load_rom(data);
     }
 
     /// Entry point for the emulator

@@ -12,7 +12,7 @@ pub fn init_io() -> [Option<u8>; 0x80] {
         0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, // FF2C
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // FF34
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // FF3C
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFC, // FF44
+        0x00, 0x00, 0x00, 0x91, 0x85, 0x00, 0x00, 0xFC, // FF44
         0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFE, // FF4C
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // FF54
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // FF5C
@@ -26,7 +26,7 @@ pub fn init_io() -> [Option<u8>; 0x80] {
     let init_mask: [u32; 4] = [
         0b11110111_11111111_11111111_11111111,
         0b11111111_11111111_00000000_00000000,
-        0b00110101_00111111_11111111_11111111,
+        0b11110101_00111111_11111111_11111111,
         0b11111111_11111111_11111111_11111111,
     ];
 
@@ -39,10 +39,12 @@ pub fn init_io() -> [Option<u8>; 0x80] {
 
         for bit in 0..32 {
             // Get the current byte address within IO memory
-            let mem_addr = bit + i * 32;
+            let mem_addr = bit + (i * 32);
+
+            let offset = 1 << (31 - bit);
 
             // This translates the bit index (0-32) to a mask, starting from the left side (high)
-            if map & (1 << 31 - bit) > 0 {
+            if map & offset > 0 {
                 memory[mem_addr] = Some(initial[mem_addr]);
             } else {
                 memory[mem_addr] = None;
