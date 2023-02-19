@@ -97,9 +97,7 @@ impl Mmu {
         } else if addr < 0xFF80 {
             // FF00 - FF7F
             // IO
-            println!("{addr} - {}", 0xFF00);
             let addr = addr - 0xFEFF;
-            println!("{addr}");
             MmuAddr::Io(addr)
         } else if addr < 0xFFFF {
             // FF80 - FFFE

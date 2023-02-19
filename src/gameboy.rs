@@ -5,14 +5,14 @@ use crate::{
 };
 
 pub struct Gbc {
-    cpu: Cpu,
+    pub cpu: Cpu,
 }
 
 impl Gbc {
-    pub fn new() -> Self {
+    pub fn new(debug: bool) -> Self {
         let memory = Mmu::new(MbcSelector::NoMbc);
         let ppu = Ppu::new_headless(&memory);
-        let cpu = Cpu::new(memory, ppu);
+        let cpu = Cpu::new(memory, ppu, debug);
 
         Self { cpu }
     }

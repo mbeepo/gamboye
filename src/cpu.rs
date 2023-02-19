@@ -19,18 +19,19 @@ const NORMAL_TICK_DURATION: u128 = (1000.0 / NORMAL_MHZ) as u128;
 const FAST_TICK_DURATION: u128 = (1000.0 / FAST_MHZ) as u128;
 
 pub struct Cpu {
-    regs: Registers,
-    memory: Mmu,
-    ppu: Ppu,
-    double_speed: bool,
-    tick_duration: u128,
-    last_tick: Instant,
-    halted: bool,
-    last_render: Instant,
+    pub regs: Registers,
+    pub memory: Mmu,
+    pub ppu: Ppu,
+    pub double_speed: bool,
+    pub tick_duration: u128,
+    pub last_tick: Instant,
+    pub halted: bool,
+    pub last_render: Instant,
+    pub debug: bool,
 }
 
 impl Cpu {
-    pub fn new(memory: Mmu, ppu: Ppu) -> Self {
+    pub fn new(memory: Mmu, ppu: Ppu, debug: bool) -> Self {
         Self {
             regs: Registers::new(),
             memory,
@@ -40,6 +41,7 @@ impl Cpu {
             last_tick: Instant::now(),
             halted: false,
             last_render: Instant::now(),
+            debug,
         }
     }
 
@@ -103,6 +105,10 @@ impl Cpu {
 
     /// Executes a single instruction
     pub(crate) fn execute(&mut self, instruction: Instruction) -> u16 {
+        if self.debug {
+            dbg!(instruction);
+        }
+
         match instruction {
             Instruction::ADD(target)
             | Instruction::ADC(target)

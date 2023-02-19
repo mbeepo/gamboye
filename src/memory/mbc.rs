@@ -29,8 +29,6 @@ pub trait Mbc {
 
     /// Loads cartridge data into ROM
     fn load_rom(&mut self, data: &[u8]) {
-        dbg!(data.len());
-
         match self.translate((data.len() - 1) as u16) {
             MbcAddr::Rom(_) => {
                 for addr in 0..data.len() {

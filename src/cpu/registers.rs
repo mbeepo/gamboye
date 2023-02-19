@@ -1,4 +1,5 @@
 /// Flag register state
+#[derive(Clone, Copy, Debug)]
 pub struct Flags {
     pub zero: bool,
     pub subtract: bool,
@@ -46,6 +47,7 @@ impl Flags {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Registers {
     pub a: u8,
     pub f: Flags,
