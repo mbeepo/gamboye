@@ -79,6 +79,10 @@ impl Cpu {
     pub(crate) fn step(&mut self) -> Option<()> {
         self.tick();
 
+        if self.debug {
+            println!("Loading instruction")
+        }
+
         let instruction_byte = self.mem_load(self.regs.pc);
         let (instruction_byte, prefixed) = if instruction_byte == 0xC8 {
             (self.mem_load(self.regs.pc.wrapping_add(1)), true)
@@ -106,7 +110,9 @@ impl Cpu {
     /// Executes a single instruction
     pub(crate) fn execute(&mut self, instruction: Instruction) -> u16 {
         if self.debug {
+            println!("Executing instruction");
             dbg!(instruction);
+            dbg!(self.regs);
         }
 
         match instruction {
@@ -351,12 +357,26 @@ impl Cpu {
     /// ### Panic Conditions
     /// - Panics if the address is uninitialized
     fn mem_load(&mut self, addr: u16) -> u8 {
+        if self.debug {
+            print!("[LOAD] {addr:#04X}");
+        }
+
         self.tick();
-        self.memory.load(addr).unwrap()
+        let out = self.memory.load(addr).unwrap();
+
+        if self.debug {
+            println!(" -> {out:#02X}");
+        }
+
+        out
     }
 
     /// Sets a byte in memory and ticks an M-cycle
     fn mem_set(&mut self, addr: u16, value: u8) {
+        if self.debug {
+            println!("[SET] {addr:#04X} <- {value:#02X}");
+        }
+
         self.tick();
         self.memory.set(addr, value);
     }

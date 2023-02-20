@@ -34,12 +34,12 @@ pub struct Mmu {
     wram: WramBank, // 8 wram blocks, first one is always in C000 - CFFF, the rest are switchable in D000 - DFFF
     // E000 - FDFF is mapped to $C000 - $DDFF
     // FE00 - FE9F
-    oam: [Option<u8>; 0x9F], // sprite attribute table, display information for objects are stored here
+    oam: [Option<u8>; 0xA0], // sprite attribute table, display information for objects are stored here
     // FEA0 - FEFF is unusable
     // FF00 - FF7F
     io: [Option<u8>; 0x80], // io registers for interfacing with peripherals
     // FF80 - FFFE
-    hram: [Option<u8>; 0x7E], // high ram, physically located within the cpu, can be used during DMA transfers
+    hram: [Option<u8>; 0x7F], // high ram, physically located within the cpu, can be used during DMA transfers
     // FFFF
     ie: u8, // interrupt enable register
 }
@@ -52,9 +52,9 @@ impl Mmu {
             mbc,
             vram: VramBank::new(),
             wram: WramBank::new(),
-            oam: [None; 0x9F],
+            oam: [None; 0xA0],
             io: init_io(),
-            hram: [None; 0x7E],
+            hram: [None; 0x7F],
             ie: 0,
         }
     }
@@ -103,6 +103,7 @@ impl Mmu {
             // FF80 - FFFE
             // HRAM
             let addr = addr - 0xFF80;
+
             MmuAddr::Hram(addr)
         } else {
             // FFFF
@@ -150,11 +151,6 @@ impl Mmu {
             MmuAddr::Oam(a) => self.oam[a as usize] = Some(value),
             MmuAddr::Prohibited => {}
             MmuAddr::Io(a) => {
-                // Serial transfer control
-                if addr == 0xFF02 && value & 0x80 > 0 {
-                    print!("{}", self.load(0xFF01).unwrap() as char);
-                }
-
                 // WRAM Bank Select
                 if addr == 0xFF70 {
                     self.wram.select(value);
@@ -182,6 +178,25 @@ impl Mmu {
     /// Will return `0` for any uninitialized cells
     pub fn load_block(&mut self, start: u16, end: u16) -> Vec<u8> {
         (start..=end).map(|i| self.load(i).unwrap_or(0)).collect()
+    }
+
+    /// Reads the serial value from SB if SC.7 is set
+    ///
+    /// Returns 0xFF if SC.7 is not set, or either SB or SC are uninitialized
+    ///
+    /// Mutable so it can reset SC.7 to signal that the byte was sent
+    pub fn read_serial(&mut self) -> u8 {
+        if let Some(sc) = self.load(0xFF02) {
+            if sc & (1 << 7) > 0 {
+                self.set(0xFF01, 0xFF);
+                self.set(0xFF02, sc & !(1 << 7));
+                self.load(0xFF01).unwrap_or(0xFF)
+            } else {
+                0xFF
+            }
+        } else {
+            0xFF
+        }
     }
 }
 

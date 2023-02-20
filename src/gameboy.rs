@@ -25,4 +25,14 @@ impl Gbc {
     pub fn start(&mut self) {
         self.cpu.main_loop();
     }
+
+    /// Move the system forward by one CPU tick
+    pub fn step(&mut self) {
+        self.cpu.step();
+    }
+
+    /// Reads the
+    pub fn read_serial(&mut self) -> u8 {
+        self.cpu.memory.read_serial()
+    }
 }
