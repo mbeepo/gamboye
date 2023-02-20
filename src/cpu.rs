@@ -28,10 +28,11 @@ pub struct Cpu {
     pub halted: bool,
     pub last_render: Instant,
     pub debug: bool,
+    pub allow_uninit: bool,
 }
 
 impl Cpu {
-    pub fn new(memory: Mmu, ppu: Ppu, debug: bool) -> Self {
+    pub fn new(memory: Mmu, ppu: Ppu, debug: bool, allow_uninit: bool) -> Self {
         Self {
             regs: Registers::new(),
             memory,
@@ -42,6 +43,7 @@ impl Cpu {
             halted: false,
             last_render: Instant::now(),
             debug,
+            allow_uninit,
         }
     }
 
@@ -50,9 +52,8 @@ impl Cpu {
             if self.last_tick.elapsed().as_nanos() >= self.tick_duration {
                 self.last_tick = Instant::now();
 
-                if let None = self.step() {
-                    return;
-                }
+                // Err means
+                if let Err(_) = self.step() {}
             }
 
             // normal speed ticks every ~238ns, and double speed ticks every ~119ns
@@ -75,44 +76,51 @@ impl Cpu {
     }
 
     /// Executes a CPU instruction and moves the PC to its next position.
-    /// Returns `Some(())` if operation should continue, or `None` if STOP was called and it should stop
-    pub(crate) fn step(&mut self) -> Option<()> {
+    ///
+    /// ### Return Variants
+    /// - Returns `Some(true)` if operation should continue
+    /// - Returns `Some(false)` if STOP was called and execution should stop
+    /// - Returns `Err(u16)` if there was an attempt to read from uninitialized memory
+    pub(crate) fn step(&mut self) -> Result<bool, u16> {
         self.tick();
 
         if self.debug {
             println!("Loading instruction")
         }
 
-        let instruction_byte = self.mem_load(self.regs.pc);
+        let instruction_byte = self.mem_load(self.regs.pc)?;
         let (instruction_byte, prefixed) = if instruction_byte == 0xC8 {
-            (self.mem_load(self.regs.pc.wrapping_add(1)), true)
+            (self.mem_load(self.regs.pc.wrapping_add(1))?, true)
         } else {
             (instruction_byte, false)
         };
 
         let next_pc = if let Some(instruction) = Instruction::from_byte(prefixed, instruction_byte)
         {
-            self.execute(instruction)
+            self.execute(instruction)?
         } else {
-            panic!("Unknown instruction found at 0x{:x}", instruction_byte);
+            panic!(
+                "Undefined opcode at {:#04X} ({instruction_byte:#02X})",
+                self.regs.pc
+            );
         };
 
         // this should only happen on STOP, in which case we should stop the loop
         if next_pc == self.regs.pc {
-            return None;
+            return Ok(false);
         }
 
         self.regs.pc = next_pc;
 
-        Some(())
+        Ok(true)
     }
 
     /// Executes a single instruction
-    pub(crate) fn execute(&mut self, instruction: Instruction) -> u16 {
+    pub(crate) fn execute(&mut self, instruction: Instruction) -> Result<u16, u16> {
         if self.debug {
             println!("Executing instruction");
             dbg!(instruction);
-            dbg!(self.regs);
+            println!("{}", self.regs);
         }
 
         match instruction {
@@ -131,8 +139,8 @@ impl Cpu {
                     ArithmeticTarget::E => self.regs.e,
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
-                    ArithmeticTarget::HL => self.load_from_hl(),
-                    ArithmeticTarget::Immediate => self.load_d8(),
+                    ArithmeticTarget::HL => self.load_from_hl()?,
+                    ArithmeticTarget::Immediate => self.load_d8()?,
                 };
 
                 let new_value = match instruction {
@@ -157,8 +165,8 @@ impl Cpu {
                     ArithmeticTarget::E => self.regs.e,
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
-                    ArithmeticTarget::HL => self.load_from_hl(),
-                    ArithmeticTarget::Immediate => self.load_d8(),
+                    ArithmeticTarget::HL => self.load_from_hl()?,
+                    ArithmeticTarget::Immediate => self.load_d8()?,
                 };
 
                 self.sub(value);
@@ -181,7 +189,7 @@ impl Cpu {
                     ArithmeticTarget::E => self.regs.e,
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
-                    ArithmeticTarget::HL => self.load_from_hl(),
+                    ArithmeticTarget::HL => self.load_from_hl()?,
                     ArithmeticTarget::Immediate => unreachable!(
                         "There is no opcode for this instruction with an immediate argument"
                     ),
@@ -234,7 +242,7 @@ impl Cpu {
                 self.regs.set_hl(new_value);
             }
             Instruction::ADDSP => {
-                let value = self.load_s8();
+                let value = self.load_s8()?;
                 self.regs.sp = self.add_sp(value);
             }
             Instruction::INCW(target) => match target {
@@ -258,8 +266,8 @@ impl Cpu {
                     ArithmeticTarget::E => self.regs.e,
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
-                    ArithmeticTarget::HL => self.load_from_hl(),
-                    ArithmeticTarget::Immediate => self.load_d8(),
+                    ArithmeticTarget::HL => self.load_from_hl()?,
+                    ArithmeticTarget::Immediate => self.load_d8()?,
                 };
 
                 self.bit(byte, bit);
@@ -273,7 +281,7 @@ impl Cpu {
                     ArithmeticTarget::E => self.regs.e,
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
-                    ArithmeticTarget::HL => self.load_from_hl(),
+                    ArithmeticTarget::HL => self.load_from_hl()?,
                     ArithmeticTarget::Immediate => unreachable!(
                         "There is no opcode for this instruction with an immediate argument"
                     ),
@@ -301,8 +309,8 @@ impl Cpu {
             }
             Instruction::JP(test) => return self.jp(test),
             Instruction::JR(test) => return self.jr(test),
-            Instruction::JPHL => return self.jphl(),
-            Instruction::LD(transfer) => return self.ld(transfer),
+            Instruction::JPHL => return Ok(self.jphl()),
+            Instruction::LD(transfer) => return Ok(self.regs.pc.wrapping_add(self.ld(transfer)?)),
             Instruction::PUSH(source) => {
                 let value = match source {
                     StackTarget::BC => self.regs.get_bc(),
@@ -314,7 +322,7 @@ impl Cpu {
                 self.push_word(value)
             }
             Instruction::POP(target) => {
-                let value = self.pop_word();
+                let value = self.pop_word()?;
 
                 match target {
                     StackTarget::BC => self.regs.set_bc(value),
@@ -324,17 +332,18 @@ impl Cpu {
                 }
             }
             Instruction::DAA => self.regs.a = self.daa(),
-            Instruction::STOP => return self.regs.pc,
+            Instruction::STOP => return Ok(self.regs.pc),
             Instruction::HALT => self.halted = true,
             Instruction::NOP => {}
             Instruction::RET(test) => return self.ret(test),
             Instruction::RETI => return self.reti(),
             Instruction::CALL(test) => return self.call(test),
-            Instruction::RST(to) => return self.rst(to),
-            _ => todo!(),
+            Instruction::RST(to) => return Ok(self.rst(to)),
+            Instruction::DI => self.di(),
+            Instruction::EI => self.ei(),
         }
 
-        match instruction {
+        Ok(match instruction {
             // prefix instructions
             Instruction::RLC(_)
             | Instruction::RRC(_)
@@ -349,39 +358,49 @@ impl Cpu {
             | Instruction::SET(_, _) => self.regs.pc.wrapping_add(2),
             // normal instructions (jump instructions already returned)
             _ => self.regs.pc.wrapping_add(1),
-        }
+        })
     }
 
     /// Loads a byte from memory and ticks an M-cycle
     ///
     /// ### Panic Conditions
     /// - Panics if the address is uninitialized
-    fn mem_load(&mut self, addr: u16) -> u8 {
+    fn mem_load(&mut self, addr: u16) -> Result<u8, u16> {
         if self.debug {
-            print!("[LOAD] {addr:#04X}");
+            print!("[LOAD] {addr:#06X}");
         }
 
         self.tick();
-        let out = self.memory.load(addr).unwrap();
+        if let Some(out) = self.memory.load(addr) {
+            if self.debug {
+                println!(" -> {out:#04X}");
+            }
 
-        if self.debug {
-            println!(" -> {out:#02X}");
+            Ok(out)
+        } else {
+            if self.allow_uninit {
+                Ok(0)
+            } else {
+                if self.debug {
+                    println!();
+                }
+
+                Err(addr)
+            }
         }
-
-        out
     }
 
     /// Sets a byte in memory and ticks an M-cycle
     fn mem_set(&mut self, addr: u16, value: u8) {
         if self.debug {
-            println!("[SET] {addr:#04X} <- {value:#02X}");
+            println!("[SET] {addr:#06X} <- {value:#04X}");
         }
 
         self.tick();
         self.memory.set(addr, value);
     }
 
-    fn load_from_hl(&mut self) -> u8 {
+    fn load_from_hl(&mut self) -> Result<u8, u16> {
         self.mem_load(self.regs.get_hl())
     }
 
@@ -389,18 +408,30 @@ impl Cpu {
         self.mem_set(self.regs.get_hl(), value);
     }
 
-    fn load_a16(&mut self) -> u16 {
-        let low = self.mem_load(self.regs.pc.wrapping_add(1)) as u16;
-        let high = self.mem_load(self.regs.pc.wrapping_add(2)) as u16;
+    fn load_a16(&mut self) -> Result<u16, u16> {
+        let low_addr = self.regs.pc.wrapping_add(1);
+        let high_addr = self.regs.pc.wrapping_add(2);
 
-        (high << 8) | low
+        let low = if let Ok(low) = self.mem_load(low_addr) {
+            low as u16
+        } else {
+            return Err(low_addr);
+        };
+
+        let high = if let Ok(high) = self.mem_load(high_addr) {
+            high as u16
+        } else {
+            return Err(high_addr);
+        };
+
+        Ok((high << 8) | low)
     }
 
-    fn load_d8(&mut self) -> u8 {
+    fn load_d8(&mut self) -> Result<u8, u16> {
         self.mem_load(self.regs.pc.wrapping_add(1))
     }
 
-    fn load_s8(&mut self) -> i8 {
-        self.load_d8() as i8
+    fn load_s8(&mut self) -> Result<i8, u16> {
+        Ok(self.load_d8()? as i8)
     }
 }

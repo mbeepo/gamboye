@@ -9,10 +9,10 @@ pub struct Gbc {
 }
 
 impl Gbc {
-    pub fn new(debug: bool) -> Self {
-        let memory = Mmu::new(MbcSelector::NoMbc);
+    pub fn new(mbc: MbcSelector, debug: bool, no_uninit: bool) -> Self {
+        let memory = Mmu::new(mbc);
         let ppu = Ppu::new_headless(&memory);
-        let cpu = Cpu::new(memory, ppu, debug);
+        let cpu = Cpu::new(memory, ppu, debug, no_uninit);
 
         Self { cpu }
     }
@@ -27,11 +27,11 @@ impl Gbc {
     }
 
     /// Move the system forward by one CPU tick
-    pub fn step(&mut self) {
-        self.cpu.step();
+    pub fn step(&mut self) -> Result<bool, u16> {
+        self.cpu.step()
     }
 
-    /// Reads the
+    /// Reads the serial buffer
     pub fn read_serial(&mut self) -> u8 {
         self.cpu.memory.read_serial()
     }

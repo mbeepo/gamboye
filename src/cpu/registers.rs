@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 /// Flag register state
 #[derive(Clone, Copy, Debug)]
 pub struct Flags {
@@ -62,6 +64,34 @@ pub struct Registers {
     pub ime: bool,
 }
 
+impl Display for Registers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[REGISTER] a: {:#04X}
+[REGISTER] b: {:#04X}
+[REGISTER] c: {:#04X}
+[REGISTER] d: {:#04X}
+[REGISTER] h: {:#04X}
+[REGISTER] l: {:#04X}
+[REGISTER] sp: {:#06X}
+[REGISTER] pc: {:#06X}
+[REGISTER] ime: {}
+[REGISTER] flags: {:#010b}",
+            self.a,
+            self.b,
+            self.c,
+            self.d,
+            self.h,
+            self.l,
+            self.sp,
+            self.pc,
+            self.ime as u8,
+            self.f.as_byte()
+        )
+    }
+}
+
 impl Registers {
     pub fn new() -> Self {
         // init values from mooneye's test roms (misc/boot_regs-cgb)
@@ -75,7 +105,7 @@ impl Registers {
             h: 0x00,
             l: 0x7C,
             sp: 0xFFFE,
-            pc: 0x0000,
+            pc: 0x0100,
             ime: true,
         }
     }

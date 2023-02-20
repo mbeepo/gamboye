@@ -16,15 +16,15 @@ impl Ppu {
                 panic!("Unable to create window {}", err);
             }
         };
-        let lcdc = memory.load(0xFF40).unwrap();
-        let stat = memory.load(0xFF41).unwrap();
+        let lcdc = memory.load(0xFF40).unwrap_or(0);
+        let stat = memory.load(0xFF41).unwrap_or(0);
 
         Self { window, lcdc, stat }
     }
 
     pub fn new_headless(memory: &Mmu) -> Self {
-        let lcdc = memory.load(0xFF40).unwrap();
-        let stat = memory.load(0xFF41).unwrap();
+        let lcdc = memory.load(0xFF40).unwrap_or(0);
+        let stat = memory.load(0xFF41).unwrap_or(0);
 
         Self {
             window: None,

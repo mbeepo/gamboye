@@ -253,7 +253,7 @@ mod tests {
         let mmu = Mmu::new(MbcSelector::NoMbc);
         let ppu = Ppu::new_headless(&mmu);
 
-        Cpu::new(mmu, ppu, false)
+        Cpu::new(mmu, ppu, false, true)
     }
 
     // ---------- 8 bit ----------

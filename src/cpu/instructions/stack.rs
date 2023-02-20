@@ -2,12 +2,13 @@ use crate::cpu::Cpu;
 
 impl Cpu {
     /// Pops a word from the stack
-    pub(crate) fn pop_word(&mut self) -> u16 {
-        let low = self.pop() as u16;
-        let high = self.pop() as u16;
+    pub(crate) fn pop_word(&mut self) -> Result<u16, u16> {
+        let low = self.pop()? as u16;
+        let high = self.pop()? as u16;
+
         let value = (high << 8) | low;
 
-        value
+        Ok(value)
     }
 
     /// Pushes a word to the stack
@@ -20,7 +21,7 @@ impl Cpu {
     }
 
     /// Pops a byte from the stack
-    pub(crate) fn pop(&mut self) -> u8 {
+    pub(crate) fn pop(&mut self) -> Result<u8, u16> {
         let out = self.mem_load(self.regs.sp);
         self.regs.sp = self.regs.sp.wrapping_add(1);
 
@@ -46,7 +47,7 @@ mod tests {
         let mmu = Mmu::new(MbcSelector::NoMbc);
         let ppu = Ppu::new_headless(&mmu);
 
-        Cpu::new(mmu, ppu, false)
+        Cpu::new(mmu, ppu, false, true)
     }
 
     #[test]
@@ -64,20 +65,20 @@ mod tests {
 
         // Push them bad boyes onto the stack
         cpu.step();
-        assert_eq!(cpu.memory.load(0x3FFE).unwrap(), 0x12);
-        assert_eq!(cpu.memory.load(0x3FFD).unwrap(), 0x34);
+        assert_eq!(cpu.memory.load(0x3FFE), Some(0x12));
+        assert_eq!(cpu.memory.load(0x3FFD), Some(0x34));
 
         cpu.step();
-        assert_eq!(cpu.memory.load(0x3FFC).unwrap(), 0x23);
-        assert_eq!(cpu.memory.load(0x3FFB).unwrap(), 0x45);
+        assert_eq!(cpu.memory.load(0x3FFC), Some(0x23));
+        assert_eq!(cpu.memory.load(0x3FFB), Some(0x45));
 
         cpu.step();
-        assert_eq!(cpu.memory.load(0x3FFA).unwrap(), 0x34);
-        assert_eq!(cpu.memory.load(0x3FF9).unwrap(), 0x56);
+        assert_eq!(cpu.memory.load(0x3FFA), Some(0x34));
+        assert_eq!(cpu.memory.load(0x3FF9), Some(0x56));
 
         cpu.step();
-        assert_eq!(cpu.memory.load(0x3FF8).unwrap(), 0x45);
-        assert_eq!(cpu.memory.load(0x3FF7).unwrap(), 0x60);
+        assert_eq!(cpu.memory.load(0x3FF8), Some(0x45));
+        assert_eq!(cpu.memory.load(0x3FF7), Some(0x60));
 
         // POP
         cpu.step();

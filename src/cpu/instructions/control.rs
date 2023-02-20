@@ -4,7 +4,7 @@ use super::JumpTest;
 
 impl Cpu {
     /// Jumps to the address contained in the next two bytes if JumpTest succeeds
-    pub(crate) fn jp(&mut self, test: JumpTest) -> u16 {
+    pub(crate) fn jp(&mut self, test: JumpTest) -> Result<u16, u16> {
         let jump = match test {
             JumpTest::NotZero => !self.regs.get_zf(),
             JumpTest::Zero => self.regs.get_zf(),
@@ -16,12 +16,12 @@ impl Cpu {
         if jump {
             self.load_a16()
         } else {
-            self.regs.pc.wrapping_add(3)
+            Ok(self.regs.pc.wrapping_add(3))
         }
     }
 
     /// Jumps by a number of addresses as specified by the next byte
-    pub(crate) fn jr(&mut self, test: JumpTest) -> u16 {
+    pub(crate) fn jr(&mut self, test: JumpTest) -> Result<u16, u16> {
         let jump = match test {
             JumpTest::NotZero => !self.regs.get_zf(),
             JumpTest::Zero => self.regs.get_zf(),
@@ -33,11 +33,11 @@ impl Cpu {
         if jump {
             // Casting to u16 from i8 instead of u8 uses sign extension
             // This effectively allows subtraction
-            let rel = self.load_s8();
+            let rel = self.load_s8()?;
 
-            self.regs.pc.wrapping_add(rel as u16)
+            Ok(self.regs.pc.wrapping_add(rel as u16))
         } else {
-            self.regs.pc.wrapping_add(3)
+            Ok(self.regs.pc.wrapping_add(3))
         }
     }
 
@@ -47,7 +47,7 @@ impl Cpu {
     }
 
     /// Jumps to the address stored at the head of the stack
-    pub(crate) fn ret(&mut self, test: JumpTest) -> u16 {
+    pub(crate) fn ret(&mut self, test: JumpTest) -> Result<u16, u16> {
         let jump = match test {
             JumpTest::NotZero => !self.regs.get_zf(),
             JumpTest::Zero => self.regs.get_zf(),
@@ -59,19 +59,19 @@ impl Cpu {
         if jump {
             self.pop_word()
         } else {
-            self.regs.pc.wrapping_add(1)
+            Ok(self.regs.pc.wrapping_add(1))
         }
     }
 
     /// Jumps to the address stored in the stack, and sets IME to 1
-    pub(crate) fn reti(&mut self) -> u16 {
+    pub(crate) fn reti(&mut self) -> Result<u16, u16> {
         self.regs.ime = true;
 
         self.pop_word()
     }
 
     /// Pushes PC to the stack and jumps to an immediate address
-    pub(crate) fn call(&mut self, test: JumpTest) -> u16 {
+    pub(crate) fn call(&mut self, test: JumpTest) -> Result<u16, u16> {
         let jump = match test {
             JumpTest::NotZero => !self.regs.get_zf(),
             JumpTest::Zero => self.regs.get_zf(),
@@ -84,7 +84,7 @@ impl Cpu {
             self.push_word(self.regs.pc);
             self.load_a16()
         } else {
-            self.regs.pc.wrapping_add(3)
+            Ok(self.regs.pc.wrapping_add(3))
         }
     }
 
@@ -126,7 +126,7 @@ mod tests {
         let mmu = Mmu::new(MbcSelector::NoMbc);
         let ppu = Ppu::new_headless(&mmu);
 
-        Cpu::new(mmu, ppu, false)
+        Cpu::new(mmu, ppu, false, true)
     }
 
     #[test]

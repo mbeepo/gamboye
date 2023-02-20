@@ -1,23 +1,21 @@
 mod none;
+mod one;
 
 pub use none::NoMbc;
+pub use one::Mbc1;
 
 /// MBC kinds, used to set which kind the CPU will use
 #[derive(Clone, Copy, Debug)]
 pub enum MbcSelector {
     NoMbc,
+    Mbc1,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum MbcAddr {
-    Rom(u16),
-    Ram(u16),
-}
-
-/// Contained MBCs
 #[derive(Clone, Copy)]
-pub enum MbcKind {
-    NoMbc(NoMbc),
+pub enum MbcAddr {
+    Rom0(u16),
+    RomX(u16),
+    Ram(u16),
 }
 
 /// Switchable rom bank using mappers. Stands for Memory Bank Controller
@@ -28,17 +26,7 @@ pub trait Mbc {
     fn set(&mut self, addr: u16, value: u8);
 
     /// Loads cartridge data into ROM
-    fn load_rom(&mut self, data: &[u8]) {
-        match self.translate((data.len() - 1) as u16) {
-            MbcAddr::Rom(_) => {
-                for addr in 0..data.len() {
-                    self.set(addr as u16, data[addr]);
-                }
-            }
-            // the translate method should have panicked if addr was outside of the entire MBCk
-            MbcAddr::Ram(_) => panic!("He ROM too big for he got damn MBC"),
-        };
-    }
+    fn load_rom(&mut self, data: &[u8]);
 
     /// Translates a global memory address into an internal MBC address of either the ROM or RAM section
     ///
@@ -55,5 +43,6 @@ pub fn init_mbc(kind: MbcSelector) -> impl Mbc {
             rom: [None; 0x8000],
             ram: [None; 0x2000],
         },
+        MbcSelector::Mbc1 => todo!(),
     }
 }

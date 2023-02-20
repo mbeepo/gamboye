@@ -90,14 +90,14 @@ impl Mmu {
             // OAM
             let addr = addr - 0xFE00;
             MmuAddr::Oam(addr)
-        } else if addr < 0xFEFF {
+        } else if addr < 0xFF00 {
             // FEA0 - FEFF
             // unusable
             MmuAddr::Prohibited
         } else if addr < 0xFF80 {
             // FF00 - FF7F
             // IO
-            let addr = addr - 0xFEFF;
+            let addr = addr - 0xFF00;
             MmuAddr::Io(addr)
         } else if addr < 0xFFFF {
             // FF80 - FFFE
@@ -188,9 +188,11 @@ impl Mmu {
     pub fn read_serial(&mut self) -> u8 {
         if let Some(sc) = self.load(0xFF02) {
             if sc & (1 << 7) > 0 {
+                let out = self.load(0xFF01).unwrap_or(0xFF);
                 self.set(0xFF01, 0xFF);
                 self.set(0xFF02, sc & !(1 << 7));
-                self.load(0xFF01).unwrap_or(0xFF)
+
+                out
             } else {
                 0xFF
             }

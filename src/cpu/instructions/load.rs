@@ -4,7 +4,7 @@ use super::{AddressSource, ByteAddressSource, ByteSource, ByteTarget, LoadType, 
 
 impl Cpu {
     /// Loads data from one place to another
-    pub(crate) fn ld(&mut self, transfer: LoadType) -> u16 {
+    pub(crate) fn ld(&mut self, transfer: LoadType) -> Result<u16, u16> {
         match transfer {
             LoadType::Byte(target, source) => {
                 let value = match source {
@@ -15,8 +15,8 @@ impl Cpu {
                     ByteSource::E => self.regs.e,
                     ByteSource::H => self.regs.h,
                     ByteSource::L => self.regs.l,
-                    ByteSource::HL => self.load_from_hl(),
-                    ByteSource::Immediate => self.load_d8(),
+                    ByteSource::HL => self.load_from_hl()?,
+                    ByteSource::Immediate => self.load_d8()?,
                 };
 
                 match target {
@@ -31,25 +31,25 @@ impl Cpu {
                 };
 
                 match source {
-                    ByteSource::Immediate => return 2,
-                    _ => return 1,
+                    ByteSource::Immediate => return Ok(2),
+                    _ => return Ok(1),
                 }
             }
             LoadType::Word(target) => {
                 match target {
                     WordTarget::HLFromSP => {
-                        let immediate = self.load_s8() as u16;
+                        let immediate = self.load_s8()? as u16;
                         self.regs.set_hl(self.regs.sp.wrapping_add(immediate));
-                        return 2;
+                        return Ok(2);
                     }
                     WordTarget::SPFromHL => {
                         self.regs.sp = self.regs.get_hl();
-                        return 1;
+                        return Ok(1);
                     }
                     _ => {}
                 }
 
-                let source = self.load_a16();
+                let source = self.load_a16()?;
 
                 match target {
                     WordTarget::BC => self.regs.set_bc(source),
@@ -69,34 +69,33 @@ impl Cpu {
                     }
                 };
 
-                return 3;
+                return Ok(3);
             }
             LoadType::IndirectIntoA(source) => {
                 self.regs.a = match source {
-                    AddressSource::BC => self.mem_load(self.regs.get_bc()),
-                    AddressSource::DE => self.mem_load(self.regs.get_de()),
+                    AddressSource::BC => self.mem_load(self.regs.get_bc())?,
+                    AddressSource::DE => self.mem_load(self.regs.get_de())?,
                     AddressSource::HLUp => {
-                        let out = self.load_from_hl();
+                        let out = self.load_from_hl()?;
                         self.regs.set_hl(self.regs.get_hl().wrapping_add(1));
                         out
                     }
                     AddressSource::HLDown => {
-                        let out = self.load_from_hl();
+                        let out = self.load_from_hl()?;
                         self.regs.set_hl(self.regs.get_hl().wrapping_sub(1));
                         out
                     }
                     AddressSource::Immediate => {
-                        let source = self.load_a16();
-
-                        let value = self.mem_load(source);
+                        let source = self.load_a16()?;
+                        let value = self.mem_load(source)?;
 
                         // hehe short circuit
                         self.regs.a = value;
-                        return 3;
+                        return Ok(3);
                     }
                 };
 
-                return 1;
+                return Ok(1);
             }
             LoadType::IndirectFromA(target) => {
                 let value = self.regs.a;
@@ -113,52 +112,51 @@ impl Cpu {
                         self.regs.set_hl(self.regs.get_hl().wrapping_sub(1));
                     }
                     AddressSource::Immediate => {
-                        let addr = self.load_a16();
+                        let addr = self.load_a16()?;
 
                         self.mem_set(addr, value);
-                        return 3;
+                        return Ok(3);
                     }
                 };
 
-                return 1;
+                return Ok(1);
             }
             LoadType::ByteAddressIntoA(source) => {
                 let len: u16;
 
                 (self.regs.a, len) = match source {
                     ByteAddressSource::Immediate => {
-                        let immediate = self.load_d8();
-
+                        let immediate = self.load_d8()?;
                         dbg!(immediate);
 
-                        (self.mem_load(0xFF00 + immediate as u16), 2)
+                        (self.mem_load(0xFF00 + immediate as u16)?, 2)
                     }
-                    ByteAddressSource::C => (self.mem_load(0xFF00 + self.regs.c as u16), 1),
+                    ByteAddressSource::C => (self.mem_load(0xFF00 + self.regs.c as u16)?, 1),
                 };
 
-                return len;
+                return Ok(len);
             }
             LoadType::ByteAddressFromA(target) => {
                 let value = self.regs.a;
 
                 match target {
                     ByteAddressSource::Immediate => {
-                        let immediate = self.load_d8();
+                        let immediate = self.load_d8()?;
                         self.mem_set(0xFF00 + immediate as u16, value);
-                        return 2;
+                        return Ok(2);
                     }
                     ByteAddressSource::C => self.mem_set(0xFF00 + self.regs.c as u16, value),
                 };
 
-                return 1;
+                return Ok(1);
             }
             LoadType::SPOffset => {
-                let offset = self.load_s8();
+                let offset = self.load_s8()?;
                 let value = self.regs.sp + (offset as u16);
 
                 self.regs.set_hl(value);
 
-                return 2;
+                return Ok(2);
             }
         }
     }
@@ -176,7 +174,7 @@ mod tests {
         let mmu = Mmu::new(MbcSelector::NoMbc);
         let ppu = Ppu::new_headless(&mmu);
 
-        Cpu::new(mmu, ppu, false)
+        Cpu::new(mmu, ppu, false, true)
     }
 
     #[test]
@@ -261,8 +259,8 @@ mod tests {
         cpu.memory.splice(0, start);
 
         cpu.step();
-        assert_eq!(cpu.memory.load(0x0100).unwrap(), 0x67);
-        assert_eq!(cpu.memory.load(0x0101).unwrap(), 0x45);
+        assert_eq!(cpu.memory.load(0x0100), Some(0x67));
+        assert_eq!(cpu.memory.load(0x0101), Some(0x45));
     }
 
     #[test]
@@ -320,7 +318,7 @@ mod tests {
         cpu.memory.splice(0, start);
 
         cpu.step();
-        assert_eq!(cpu.memory.load(0x100).unwrap(), 0x45);
+        assert_eq!(cpu.memory.load(0x100), Some(0x45));
     }
 
     #[test]
@@ -334,7 +332,7 @@ mod tests {
         cpu.memory.splice(0, start);
 
         cpu.step();
-        assert_eq!(cpu.memory.load(0x100).unwrap(), 0x45);
+        assert_eq!(cpu.memory.load(0x100), Some(0x45));
         assert_eq!(cpu.regs.get_hl(), 0x101);
     }
 
@@ -349,7 +347,7 @@ mod tests {
         cpu.memory.splice(0, start);
 
         cpu.step();
-        assert_eq!(cpu.memory.load(0x100).unwrap(), 0x45);
+        assert_eq!(cpu.memory.load(0x100), Some(0x45));
         assert_eq!(cpu.regs.get_hl(), 0xFF);
     }
 
@@ -390,7 +388,7 @@ mod tests {
         cpu.memory.splice(0, start);
 
         cpu.step();
-        assert_eq!(cpu.memory.load(0xFF80).unwrap(), 0x45);
+        assert_eq!(cpu.memory.load(0xFF80), Some(0x45));
     }
 
     #[test]
@@ -404,6 +402,6 @@ mod tests {
         cpu.memory.splice(0, start);
 
         cpu.step();
-        assert_eq!(cpu.memory.load(0xFF80).unwrap(), 0x45);
+        assert_eq!(cpu.memory.load(0xFF80), Some(0x45));
     }
 }
