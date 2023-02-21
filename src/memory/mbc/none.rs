@@ -37,11 +37,12 @@ impl Mbc for NoMbc {
 
     fn load_rom(&mut self, data: &[u8]) {
         match self.translate((data.len() - 1) as u16) {
-            MbcAddr::Rom(_) => {
+            MbcAddr::Rom0(_) => {
                 for addr in 0..data.len() {
                     self.set(addr as u16, data[addr]);
                 }
             }
+            MbcAddr::RomX(_) => unreachable!(),
             // the translate method should have panicked if addr was outside of the entire MBCk
             MbcAddr::Ram(_) => panic!("He ROM too big for he got damn MBC"),
         };

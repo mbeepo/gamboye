@@ -46,10 +46,8 @@ pub struct Mmu {
 
 impl Mmu {
     pub fn new(mbc_kind: MbcSelector) -> Self {
-        let mbc = Box::new(init_mbc(mbc_kind));
-
         Self {
-            mbc,
+            mbc: init_mbc(mbc_kind),
             vram: VramBank::new(),
             wram: WramBank::new(),
             oam: [None; 0xA0],
@@ -128,7 +126,14 @@ impl Mmu {
                 let nibble = (addr & 0x00F0) as u8;
                 Some(nibble | nibble >> 4)
             }
-            MmuAddr::Io(a) => self.io[a as usize],
+            MmuAddr::Io(a) => {
+                // temporary, for compatibility with gameboy doctor
+                if addr == 0xFF44 {
+                    Some(0x90)
+                } else {
+                    self.io[a as usize]
+                }
+            }
             MmuAddr::Hram(a) => self.hram[a as usize],
             MmuAddr::Ie => Some(self.ie),
         }

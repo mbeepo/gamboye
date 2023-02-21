@@ -9,10 +9,10 @@ pub struct Gbc {
 }
 
 impl Gbc {
-    pub fn new(mbc: MbcSelector, debug: bool, no_uninit: bool) -> Self {
+    pub fn new(mbc: MbcSelector, debug: bool, allow_uninit: bool) -> Self {
         let memory = Mmu::new(mbc);
         let ppu = Ppu::new_headless(&memory);
-        let cpu = Cpu::new(memory, ppu, debug, no_uninit);
+        let cpu = Cpu::new(memory, ppu, debug, allow_uninit);
 
         Self { cpu }
     }

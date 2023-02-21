@@ -15,8 +15,8 @@ impl Flags {
         Self {
             zero: true,
             subtract: false,
-            half_carry: false,
-            carry: false,
+            half_carry: true,
+            carry: true,
         }
     }
 
@@ -96,14 +96,14 @@ impl Registers {
     pub fn new() -> Self {
         // init values from mooneye's test roms (misc/boot_regs-cgb)
         Self {
-            a: 0x11,
+            a: 0x01,
             f: Flags::new(),
             b: 0x00,
-            c: 0x00,
+            c: 0x13,
             d: 0x00,
-            e: 0x08,
-            h: 0x00,
-            l: 0x7C,
+            e: 0xD8,
+            h: 0x01,
+            l: 0x4D,
             sp: 0xFFFE,
             pc: 0x0100,
             ime: true,
