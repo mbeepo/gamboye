@@ -35,15 +35,15 @@ impl Cpu {
             // This effectively allows subtraction
             let rel = self.load_s8()?;
 
-            Ok(self.regs.pc.wrapping_add(rel as u16))
+            Ok(self.regs.pc.wrapping_add(2 + (rel as u16)))
         } else {
-            Ok(self.regs.pc.wrapping_add(3))
+            Ok(self.regs.pc.wrapping_add(2))
         }
     }
 
     /// Jumps to the address stored in HL
     pub(crate) fn jphl(&self) -> u16 {
-        self.regs.pc.wrapping_add(self.regs.get_hl())
+        self.regs.get_hl()
     }
 
     /// Jumps to the address stored at the head of the stack
@@ -81,7 +81,7 @@ impl Cpu {
         };
 
         if jump {
-            self.push_word(self.regs.pc);
+            self.push_word(self.regs.pc.wrapping_add(3));
             self.load_a16()
         } else {
             Ok(self.regs.pc.wrapping_add(3))

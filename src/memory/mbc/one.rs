@@ -104,7 +104,7 @@ impl Mbc for Mbc1 {
             let offset = if len - i >= 0x4000 { 0x4000 } else { len - i };
 
             for e in i..i + offset {
-                self.rom[bank][e - i] = Some(data[i]);
+                self.rom[bank][e - i] = Some(data[e]);
             }
 
             bank += 1;

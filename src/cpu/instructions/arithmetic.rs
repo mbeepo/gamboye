@@ -48,11 +48,9 @@ impl Cpu {
 
         self.regs.set_zf(out == 0);
         self.regs.set_nf(true);
-        self.regs.set_hf(false);
+        self.regs
+            .set_hf((self.regs.a & 0x0F).wrapping_sub(value & 0x0F) & 0x10 != 0);
         self.regs.set_cf(carry);
-
-        // from Mooneye's DMG emulator, pretty sure this will never be true but keeping it so I can explain this
-        // self.regs.set_hf((self.regs.a & 0xf).wrapping_sub(value & 0xf) & (0x10) != 0);
 
         out
     }
@@ -131,7 +129,7 @@ impl Cpu {
     /// - The `zero` flag is set if the output is `0`
     /// - The `subtract` flag is reset
     /// - The `half carry` flag is set if a bit was carried from bit 3 to bit 4
-    /// - The `carry` flag is set if the output wraps around `255` to `0`
+    /// - The `carry` flag is unaffected
     pub fn inc(&mut self, value: u8) -> u8 {
         let (out, carry) = value.overflowing_add(1);
 
@@ -139,7 +137,6 @@ impl Cpu {
         self.regs.set_zf(carry);
         self.regs.set_nf(false);
         self.regs.set_hf((value & 0xF) + 1 & 0x10 == 0x10);
-        self.regs.set_cf(carry);
 
         out
     }
@@ -149,15 +146,14 @@ impl Cpu {
     /// ### Flag States
     /// - The `zero` flag is set if the output is `0`
     /// - The `subtract` flag is set to `1`
-    /// - The `half carry` flag is reset to `0`
-    /// - The `carry` flag is set if the output wraps around `0` to `255`
+    /// - The `half carry` flag is set if a bit was carried from bit 3 to bit 4
+    /// - The `carry` flag is unaffected
     pub fn dec(&mut self, value: u8) -> u8 {
-        let (out, carry) = value.overflowing_sub(1);
+        let out = value.wrapping_sub(1);
 
         self.regs.set_zf(out == 0);
         self.regs.set_nf(true);
-        self.regs.set_hf(false);
-        self.regs.set_cf(carry);
+        self.regs.set_hf((value & 0x0F).wrapping_sub(1) & 0x10 != 0);
 
         out
     }
@@ -205,17 +201,16 @@ impl Cpu {
     /// Adds a u16 to register pair HL
     ///
     /// ### Flag States
-    /// - The `zero` flag is set if the output is `0`
+    /// - The `zero` flag is unaffected
     /// - The `subtract` flag is reset to `0`
-    /// - The `half carry` flag is set if bit 3 overflows into bit 4
+    /// - The `half carry` flag is set if bit 3 in the upper byte overflows into bit 4
     /// - The `carry` flag is set if the output wraps around `65535` to `0`
     pub fn add_hl(&mut self, value: u16) -> u16 {
         let (out, overflowed) = self.regs.get_hl().overflowing_add(value);
 
-        self.regs.set_zf(out == 0);
         self.regs.set_nf(false);
         self.regs
-            .set_hf((self.regs.l & 0xF) + (value & 0xF) as u8 & 0x10 == 0x10);
+            .set_hf((self.regs.h & 0x0F) + ((value >> 8) as u8 & 0x0F) & 0x10 > 0);
         self.regs.set_cf(overflowed);
 
         out
@@ -224,17 +219,18 @@ impl Cpu {
     /// Adds an i8 to the stack pointer
     ///
     /// ### Flag States
-    /// - The `zero` flag is set if the output is `0`
+    /// - The `zero` flag is reset to `0`
     /// - The `subtract` flag is reset to `0`
     /// - The `half carry` flag is set if bit 3 overflows into bit 4
     /// - The `carry` flag is set if the output wraps around `65535` to `0`
     pub fn add_sp(&mut self, value: i8) -> u16 {
         let (out, overflowed) = self.regs.sp.overflowing_add(value as u16);
 
-        self.regs.set_zf(out == 0);
+        self.regs.set_zf(false);
         self.regs.set_nf(false);
-        self.regs
-            .set_hf((self.regs.sp & 0xF) as u8 + (value & 0xF) as u8 & 0x10 == 0x10);
+        self.regs.set_hf(
+            ((self.regs.sp >> 8) as u8 & 0x0F).wrapping_add((value) as u8 & 0x0F) & 0x10 > 0,
+        );
         self.regs.set_cf(overflowed);
 
         out

@@ -5,6 +5,7 @@ use gbc::{Gbc, MbcSelector, RamSize, RomSize};
 fn main() {
     let filename = std::env::args().nth(1).unwrap();
     let data = std::fs::read(filename).unwrap();
+    let mut serial_buf = String::new();
 
     let rom_size = RomSize::from_byte(data[0x0148]);
     let ram_size = RamSize::from_byte(data[0x0149]);
@@ -16,6 +17,8 @@ fn main() {
     };
 
     let mut emu = Gbc::new(mbc, false, true);
+    emu.load_rom(&data);
+
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .append(true)
@@ -29,11 +32,12 @@ fn main() {
                     emu.cpu.regs.sp, emu.cpu.regs.pc, pcmem[0], pcmem[1], pcmem[2], pcmem[3]);
     file.write_all(out.as_bytes()).unwrap();
 
-    for i in 0..500_000 {
+    loop {
         match emu.step() {
             Ok(go) => {
                 if !go {
                     println!("----- STOP instruction reached -----");
+                    println!("Serial buffer: {}", serial_buf);
                     break;
                 } else {
                     let pc = emu.cpu.regs.pc;
@@ -42,6 +46,11 @@ fn main() {
                                     emu.cpu.regs.a, emu.cpu.regs.f.as_byte(), emu.cpu.regs.b, emu.cpu.regs.c, emu.cpu.regs.d, emu.cpu.regs.e, emu.cpu.regs.h, emu.cpu.regs.l,
                                     emu.cpu.regs.sp, emu.cpu.regs.pc, pcmem[0], pcmem[1], pcmem[2], pcmem[3]);
                     file.write_all(out.as_bytes()).unwrap();
+                    let serial = emu.read_serial();
+
+                    if serial != 0xFF {
+                        serial_buf += &format!("{}", serial as char);
+                    }
                 }
             }
             Err(addr) => {

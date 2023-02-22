@@ -127,7 +127,6 @@ impl Cpu {
                 (self.regs.a, len) = match source {
                     ByteAddressSource::Immediate => {
                         let immediate = self.load_d8()?;
-                        dbg!(immediate);
 
                         (self.mem_load(0xFF00 + immediate as u16)?, 2)
                     }

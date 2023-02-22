@@ -89,7 +89,7 @@ impl Cpu {
         }
 
         let instruction_byte = self.mem_load(self.regs.pc)?;
-        let (instruction_byte, prefixed) = if instruction_byte == 0xC8 {
+        let (instruction_byte, prefixed) = if instruction_byte == 0xCB {
             (self.mem_load(self.regs.pc.wrapping_add(1))?, true)
         } else {
             (instruction_byte, false)
@@ -123,6 +123,8 @@ impl Cpu {
             println!("{}", self.regs);
         }
 
+        let mut size = 1;
+
         match instruction {
             Instruction::ADD(target)
             | Instruction::ADC(target)
@@ -140,7 +142,10 @@ impl Cpu {
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
                     ArithmeticTarget::HL => self.load_from_hl()?,
-                    ArithmeticTarget::Immediate => self.load_d8()?,
+                    ArithmeticTarget::Immediate => {
+                        size = 2;
+                        self.load_d8()?
+                    }
                 };
 
                 let new_value = match instruction {
@@ -166,7 +171,10 @@ impl Cpu {
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
                     ArithmeticTarget::HL => self.load_from_hl()?,
-                    ArithmeticTarget::Immediate => self.load_d8()?,
+                    ArithmeticTarget::Immediate => {
+                        size = 2;
+                        self.load_d8()?
+                    }
                 };
 
                 self.sub(value);
@@ -267,7 +275,10 @@ impl Cpu {
                     ArithmeticTarget::H => self.regs.h,
                     ArithmeticTarget::L => self.regs.l,
                     ArithmeticTarget::HL => self.load_from_hl()?,
-                    ArithmeticTarget::Immediate => self.load_d8()?,
+                    ArithmeticTarget::Immediate => {
+                        size = 2;
+                        self.load_d8()?
+                    }
                 };
 
                 self.bit(byte, bit);
@@ -343,7 +354,7 @@ impl Cpu {
             Instruction::EI => self.ei(),
         }
 
-        Ok(match instruction {
+        match instruction {
             // prefix instructions
             Instruction::RLC(_)
             | Instruction::RRC(_)
@@ -355,10 +366,12 @@ impl Cpu {
             | Instruction::SRL(_)
             | Instruction::BIT(_, _)
             | Instruction::RES(_, _)
-            | Instruction::SET(_, _) => self.regs.pc.wrapping_add(2),
+            | Instruction::SET(_, _) => size = 2,
             // normal instructions (jump instructions already returned)
-            _ => self.regs.pc.wrapping_add(1),
-        })
+            _ => {}
+        }
+
+        Ok(self.regs.pc.wrapping_add(size))
     }
 
     /// Loads a byte from memory and ticks an M-cycle
