@@ -97,10 +97,10 @@ impl Cpu {
             panic!("RST operand out of range: `{to}`. Valid range is 0..=7");
         }
 
-        self.push_word(self.regs.pc);
+        self.push_word(self.regs.pc.wrapping_add(1));
 
         // We're jumping to the nth byte, so we can just use it as an address directly
-        to as u16
+        to as u16 * 0x8
     }
 
     /// Reset IME to `0`

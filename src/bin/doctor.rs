@@ -37,6 +37,7 @@ fn main() {
             Ok(go) => {
                 if !go {
                     println!("----- STOP instruction reached -----");
+                    println!("PC: {:#06X}", emu.cpu.regs.pc);
                     println!("Serial buffer: {}", serial_buf);
                     break;
                 } else {
@@ -46,6 +47,7 @@ fn main() {
                                     emu.cpu.regs.a, emu.cpu.regs.f.as_byte(), emu.cpu.regs.b, emu.cpu.regs.c, emu.cpu.regs.d, emu.cpu.regs.e, emu.cpu.regs.h, emu.cpu.regs.l,
                                     emu.cpu.regs.sp, emu.cpu.regs.pc, pcmem[0], pcmem[1], pcmem[2], pcmem[3]);
                     file.write_all(out.as_bytes()).unwrap();
+
                     let serial = emu.read_serial();
 
                     if serial != 0xFF {

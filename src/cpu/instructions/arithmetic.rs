@@ -198,21 +198,21 @@ impl Cpu {
         if !self.regs.get_nf() {
             // previous instruction was not a subtraction
             if self.regs.get_cf() || a > 0x99 {
-                a += 0x60;
+                a = a.wrapping_add(0x60);
                 self.regs.set_cf(true);
             }
 
             if self.regs.get_hf() || a & 0x0F > 0x09 {
-                a += 0x06;
+                a = a.wrapping_add(0x06);
             }
         } else {
             // previous instruction was a subtraction
             if self.regs.get_cf() {
-                a -= 0x60;
+                a = a.wrapping_sub(0x60);
             }
 
             if self.regs.get_hf() {
-                a -= 0x06;
+                a = a.wrapping_sub(0x06);
             }
         }
 

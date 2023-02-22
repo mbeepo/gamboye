@@ -212,7 +212,7 @@ impl Cpu {
     /// Rotates the selected register right, putting bit 0 in both the carry flag and bit 7
     ///
     /// ### Flag States
-    /// - The `zero` flag is reset to `0`
+    /// - The `zero` flag is set if the output is `0`
     /// - The `subtract` flag is reset to `0`
     /// - The `half carry` flag is reset to `0`
     /// - The `carry` flag is set to the previous value of bit 0
@@ -221,7 +221,7 @@ impl Cpu {
 
         let out = (value >> 1) | (carry << 7);
 
-        self.regs.set_zf(false);
+        self.regs.set_zf(out == 0);
         self.regs.set_nf(false);
         self.regs.set_hf(false);
         self.regs.set_cf(carry > 0);
@@ -232,7 +232,7 @@ impl Cpu {
     /// Rotates the selected register left, putting bit 7 in both the carry flag and bit 0
     ///
     /// ### Flag States
-    /// - The `zero` flag is reset to `0`
+    /// - The `zero` flag is set if the output is `0`
     /// - The `subtract` flag is reset to `0`
     /// - The `half carry` flag is reset to `0`
     /// - The `carry` flag is set to the previous value of bit 7
@@ -241,7 +241,7 @@ impl Cpu {
 
         let out = (value << 1) | (carry as u8);
 
-        self.regs.set_zf(false);
+        self.regs.set_zf(out == 0);
         self.regs.set_nf(false);
         self.regs.set_hf(false);
         self.regs.set_cf(carry);
@@ -270,7 +270,7 @@ impl Cpu {
         out
     }
 
-    /// Shifts the selected register left, putting bit 7 in the carry flag and leaving bit 0 unchanged
+    /// Shifts the selected register left, putting bit 7 in the carry flag and resetting bit 0 to `0`
     ///
     /// ### Flag States
     /// - The `zero` flag is set if the output is `0`
@@ -279,9 +279,8 @@ impl Cpu {
     /// - The `carry` flag is set to the previous value of bit 7
     pub(crate) fn sla(&mut self, value: u8) -> u8 {
         let carry = value & (1 << 7) > 0;
-        let old0 = value & 1;
 
-        let out = (value << 1) | old0;
+        let out = value << 1;
 
         self.regs.set_zf(out == 0);
         self.regs.set_nf(false);
