@@ -38,8 +38,9 @@ impl Cpu {
             LoadType::Word(target) => {
                 match target {
                     WordTarget::HLFromSP => {
-                        let immediate = self.load_s8()? as u16;
-                        self.regs.set_hl(self.regs.sp.wrapping_add(immediate));
+                        let immediate = self.load_s8()?;
+                        let out = self.add_sp(immediate);
+                        self.regs.set_hl(out);
                         return Ok(2);
                     }
                     WordTarget::SPFromHL => {

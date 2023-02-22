@@ -252,6 +252,7 @@ impl Cpu {
             Instruction::ADDSP => {
                 let value = self.load_s8()?;
                 self.regs.sp = self.add_sp(value);
+                size = 2;
             }
             Instruction::INCW(target) => match target {
                 WordArithmeticTarget::BC => self.regs.set_bc(self.regs.get_bc().wrapping_add(1)),
@@ -407,6 +408,10 @@ impl Cpu {
     fn mem_set(&mut self, addr: u16, value: u8) {
         if self.debug {
             println!("[SET] {addr:#06X} <- {value:#04X}");
+        }
+
+        if addr == 0 {
+            println!("[{:#06X}] {addr:#06X} <- {value:#04X}", self.regs.pc)
         }
 
         self.tick();

@@ -35,7 +35,7 @@ impl Cpu {
             // This effectively allows subtraction
             let rel = self.load_s8()?;
 
-            Ok(self.regs.pc.wrapping_add(2 + (rel as u16)))
+            Ok(self.regs.pc.wrapping_add(2).wrapping_add(rel as u16))
         } else {
             Ok(self.regs.pc.wrapping_add(2))
         }
