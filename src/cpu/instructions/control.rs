@@ -81,6 +81,7 @@ impl Cpu {
         };
 
         if jump {
+            self.tick();
             self.push_word(self.regs.pc.wrapping_add(3));
             self.load_a16()
         } else {

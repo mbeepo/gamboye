@@ -142,6 +142,7 @@ fn main() {
             Ok(go) => {
                 if !go {
                     println!("----- STOP instruction reached -----");
+                    println!("Serial buffer: {}", serial_buf);
                     break;
                 }
             }
@@ -154,7 +155,7 @@ fn main() {
         let serial = emu.read_serial();
 
         if serial != 0xFF {
-            println!("Serial out: {} ({serial:#02X}", serial as char);
+            println!("Serial out: {} ({serial:#02X})", serial as char);
             serial_buf += &format!("{}", serial as char);
         }
     }

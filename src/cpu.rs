@@ -3,7 +3,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{memory::Mmu, ppu::Ppu};
+use crate::{
+    memory::{self, Mmu},
+    ppu::Ppu,
+};
 
 use self::{
     instructions::{ArithmeticTarget, Instruction, StackTarget, WordArithmeticTarget},
@@ -13,8 +16,8 @@ use self::{
 mod instructions;
 mod registers;
 
-const NORMAL_MHZ: f64 = 4.194304;
-const FAST_MHZ: f64 = 8.388608;
+const NORMAL_MHZ: f64 = 1.048576;
+const FAST_MHZ: f64 = 2.097152;
 const NORMAL_TICK_DURATION: u128 = (1000.0 / NORMAL_MHZ) as u128;
 const FAST_TICK_DURATION: u128 = (1000.0 / FAST_MHZ) as u128;
 
@@ -29,6 +32,10 @@ pub struct Cpu {
     pub last_render: Instant,
     pub debug: bool,
     pub allow_uninit: bool,
+    ei_called: u8,
+    div: u16,
+    div_last: bool,
+    tick: u8,
 }
 
 impl Cpu {
@@ -44,6 +51,10 @@ impl Cpu {
             last_render: Instant::now(),
             debug,
             allow_uninit,
+            ei_called: 0,
+            div: 0,
+            div_last: false,
+            tick: 0,
         }
     }
 
@@ -69,10 +80,61 @@ impl Cpu {
 
     /// Ticks the system by 1 M-cycle, handling interrupts and stepping the PPU
     pub(crate) fn tick(&mut self) {
+        self.tick += 1;
+
         // render at 60hz (once every 16.66... ms)
         if self.last_render.elapsed().as_nanos() >= 16_667 {
             self.ppu.render(&self.memory);
         }
+
+        self.tick_div();
+    }
+
+    fn tick_div(&mut self) {
+        // div increases every M-cycle
+        self.div = self.div.wrapping_add(1);
+        self.memory.set(memory::DIV, (self.div >> 8) as u8);
+
+        let tac = self
+            .memory
+            .load(memory::TAC)
+            .expect("TAC register uninitialized");
+
+        // numbers from here https://pixelbits.16-b.it/GBEDG/timers/#timer-operation
+        // seems backwards, but this way we dont need to shift it after the AND
+        let div_bit = match tac & 0b11 {
+            0b00 => self.div >> 9 & 1,
+            0b01 => self.div >> 3 & 1,
+            0b10 => self.div >> 5 & 1,
+            0b11 => self.div >> 7 & 1,
+            _ => unreachable!(),
+        } as u8;
+
+        let tac_bit = tac >> 2 & 1;
+        let div_and = div_bit & tac_bit == 1;
+
+        if self.div_last == true && div_and == false {
+            let (tima, overflowed) = self
+                .memory
+                .load(memory::TIMA)
+                .unwrap_or(0)
+                .overflowing_add(1);
+
+            self.memory.set(memory::TIMA, tima);
+
+            if overflowed {
+                let mut if_reg = self
+                    .memory
+                    .load(memory::IF)
+                    .expect("Error reading IF register: Uninitialized");
+
+                if_reg |= 1 << 2;
+
+                self.memory.set(memory::IF, if_reg);
+            }
+        }
+
+        self.div_last = div_and;
     }
 
     /// Executes a CPU instruction and moves the PC to its next position.
@@ -80,17 +142,38 @@ impl Cpu {
     /// ### Return Variants
     /// - Returns `Some(true)` if operation should continue
     /// - Returns `Some(false)` if STOP was called and execution should stop
-    /// - Returns `Err(u16)` if there was an attempt to read from uninitialized memory
+    /// - Returns `Err(addr)` if there was an attempt to read from uninitialized memory
     pub(crate) fn step(&mut self) -> Result<bool, u16> {
-        self.tick();
-
         if self.debug {
             println!("Loading instruction")
         }
 
+        self.tick = 0;
+
+        if self.halted {
+            let Some(ie) = self
+                .memory
+                .load(memory::IE) else {
+                    return Err(memory::IE);
+                };
+
+            let Some(if_reg) = self
+                .memory
+                .load(memory::IF) else {
+                    return Err(memory::IF);
+                };
+
+            if ie & if_reg > 0 {
+                self.regs.ime = true;
+                self.handle_interrupts();
+            }
+
+            return Ok(true);
+        }
+
         let instruction_byte = self.mem_load(self.regs.pc)?;
         let (instruction_byte, prefixed) = if instruction_byte == 0xCB {
-            (self.mem_load(self.regs.pc.wrapping_add(1))?, true)
+            (self.load_d8()?, true)
         } else {
             (instruction_byte, false)
         };
@@ -100,10 +183,12 @@ impl Cpu {
             self.execute(instruction)?
         } else {
             panic!(
-                "Undefined opcode at {:#04X} ({instruction_byte:#02X})",
+                "Undefined opcode at {:#06X} ({instruction_byte:#04X})",
                 self.regs.pc
             );
         };
+
+        println!("{instruction_byte:#04X}: {} ticks", self.tick);
 
         // this should only happen on STOP, in which case we should stop the loop
         if next_pc == self.regs.pc {
@@ -112,7 +197,65 @@ impl Cpu {
 
         self.regs.pc = next_pc;
 
+        // the effects of ei are delayed by one instruction
+        if self.ei_called == 1 {
+            self.ei_called += 1;
+        } else if self.ei_called == 2 {
+            self.ei();
+            self.ei_called = 0;
+        }
+
+        self.handle_interrupts();
         Ok(true)
+    }
+
+    fn handle_interrupts(&mut self) {
+        if self.regs.ime {
+            let ie = self
+                .mem_load(memory::IE)
+                .expect("Error reading IE register: Uninitialized");
+            let if_reg = self
+                .mem_load(memory::IF)
+                .expect("Error reading IF register: Uninitialized");
+
+            if ie & if_reg == 0 {
+                return;
+            }
+
+            let mut same = [false; 5];
+
+            for i in 0..5 {
+                let ie_bit = ie & (1 << i);
+
+                same[i] = ie_bit > 0 && ie_bit == if_reg & (1 << i);
+            }
+
+            for i in 0..5 {
+                if same[i] {
+                    // acknowledge the interrupt and prevent further interrupts
+                    self.mem_set(memory::IF, if_reg - (1 << i));
+                    self.regs.ime = false;
+
+                    // 2 wait cycles are executed
+                    self.tick();
+                    self.tick();
+
+                    println!(
+                        "addr: {:#06X} = {:#04X}",
+                        self.regs.pc,
+                        self.memory.load(self.regs.pc).unwrap()
+                    );
+
+                    // pc is pushed to the stack
+                    self.push_word(self.regs.pc);
+
+                    // the ISR address is loaded into pc, taking another cycle
+                    self.regs.pc = 0x40 + 0x08 * i as u16;
+                    self.tick();
+                    return;
+                }
+            }
+        }
     }
 
     /// Executes a single instruction
@@ -352,7 +495,7 @@ impl Cpu {
             Instruction::CALL(test) => return self.call(test),
             Instruction::RST(to) => return Ok(self.rst(to)),
             Instruction::DI => self.di(),
-            Instruction::EI => self.ei(),
+            Instruction::EI => self.ei_called = 1,
         }
 
         match instruction {
@@ -368,7 +511,7 @@ impl Cpu {
             | Instruction::BIT(_, _)
             | Instruction::RES(_, _)
             | Instruction::SET(_, _) => size = 2,
-            // normal instructions (jump instructions already returned)
+            // special length instructions already returned, size is set to 1 for normal length instructions
             _ => {}
         }
 
@@ -377,14 +520,16 @@ impl Cpu {
 
     /// Loads a byte from memory and ticks an M-cycle
     ///
-    /// ### Panic Conditions
-    /// - Panics if the address is uninitialized
+    /// ### Return Variants
+    /// - Returns `Ok(value)` if a byte was read successfully
+    /// - Returns `Err(addr)` if the byte at the address was uninitialized, and `Self::allow_uninit` is false
     fn mem_load(&mut self, addr: u16) -> Result<u8, u16> {
         if self.debug {
             print!("[LOAD] {addr:#06X}");
         }
 
         self.tick();
+
         if let Some(out) = self.memory.load(addr) {
             if self.debug {
                 println!(" -> {out:#04X}");
@@ -410,8 +555,9 @@ impl Cpu {
             println!("[SET] {addr:#06X} <- {value:#04X}");
         }
 
-        if addr == 0 {
-            println!("[{:#06X}] {addr:#06X} <- {value:#04X}", self.regs.pc)
+        if addr == memory::DIV {
+            self.div = 0;
+            self.memory.set(memory::DIV, 0);
         }
 
         self.tick();

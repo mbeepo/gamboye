@@ -22,7 +22,7 @@ impl VramBank {
     /// Gets the byte stored in VRAM at the internal address `addr`
     ///
     /// ### Return Variants
-    /// - Returns `Some(u8)` if the selected cell is initialized
+    /// - Returns `Some<u8>` if the selected cell is initialized
     /// - Returns `None` if the selected cell is uninitialized
     ///
     /// ### Panic Conditions
@@ -73,7 +73,7 @@ impl WramBank {
     /// Gets the byte stored in WRAM at the internal address `addr`
     ///
     /// ### Return Variants
-    /// - Returns `Some(u8)` if the selected cell is initialized
+    /// - Returns `Some<u8>` if the selected cell is initialized
     /// - Returns `None` if the selected cell is uninitialized
     ///
     /// ### Panic Conditions

@@ -8,6 +8,15 @@ mod bank;
 mod init;
 pub mod mbc;
 
+pub const LY: u16 = 0xFF44;
+pub const WRAM_BANK_SELECT: u16 = 0xFF70;
+pub const IE: u16 = 0xFFFF;
+pub const IF: u16 = 0xFF0F;
+pub const DIV: u16 = 0xFF04;
+pub const TIMA: u16 = 0xFF05;
+pub const TMA: u16 = 0xFF06;
+pub const TAC: u16 = 0xFF07;
+
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub(crate) enum MmuAddr {
     Mbc(u16),
@@ -113,7 +122,7 @@ impl Mmu {
     /// Attempts to retrieve a byte of data from memory at the address `addr`
     ///
     /// ### Return Variants
-    /// - Returns `Some(u8)` if the selected cell is initialized
+    /// - Returns `Some<u8>` if the selected cell is initialized
     /// - Returns `None` if the selected cell is uninitialized
     pub fn load(&self, addr: u16) -> Option<u8> {
         match Self::translate(addr) {
@@ -128,7 +137,7 @@ impl Mmu {
             }
             MmuAddr::Io(a) => {
                 // temporary, for compatibility with gameboy doctor
-                if addr == 0xFF44 {
+                if addr == LY {
                     Some(0x90)
                 } else {
                     self.io[a as usize]
@@ -157,7 +166,7 @@ impl Mmu {
             MmuAddr::Prohibited => {}
             MmuAddr::Io(a) => {
                 // WRAM Bank Select
-                if addr == 0xFF70 {
+                if addr == WRAM_BANK_SELECT {
                     self.wram.select(value);
                 }
 

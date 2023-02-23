@@ -41,6 +41,7 @@ impl Cpu {
                         let immediate = self.load_s8()?;
                         let out = self.add_sp(immediate);
                         self.regs.set_hl(out);
+                        self.tick();
                         return Ok(2);
                     }
                     WordTarget::SPFromHL => {
@@ -90,7 +91,6 @@ impl Cpu {
                         let source = self.load_a16()?;
                         let value = self.mem_load(source)?;
 
-                        // hehe short circuit
                         self.regs.a = value;
                         return Ok(3);
                     }
@@ -118,7 +118,7 @@ impl Cpu {
                         self.mem_set(addr, value);
                         return Ok(3);
                     }
-                };
+                }
 
                 return Ok(1);
             }
