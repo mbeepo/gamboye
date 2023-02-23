@@ -188,7 +188,7 @@ impl Cpu {
             );
         };
 
-        println!("{instruction_byte:#04X}: {} ticks", self.tick);
+        // println!("{instruction_byte:#04X}: {} ticks", self.tick);
 
         // this should only happen on STOP, in which case we should stop the loop
         if next_pc == self.regs.pc {

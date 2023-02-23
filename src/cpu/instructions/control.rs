@@ -13,8 +13,10 @@ impl Cpu {
             JumpTest::Always => true,
         };
 
+        let out = self.load_a16();
+
         if jump {
-            self.load_a16()
+            out
         } else {
             Ok(self.regs.pc.wrapping_add(3))
         }
@@ -30,11 +32,10 @@ impl Cpu {
             JumpTest::Always => true,
         };
 
-        if jump {
-            // Casting to u16 from i8 instead of u8 uses sign extension
-            // This effectively allows subtraction
-            let rel = self.load_s8()?;
+        let rel = self.load_s8()?;
+        self.tick();
 
+        if jump {
             Ok(self.regs.pc.wrapping_add(2).wrapping_add(rel as u16))
         } else {
             Ok(self.regs.pc.wrapping_add(2))
@@ -56,8 +57,10 @@ impl Cpu {
             JumpTest::Always => true,
         };
 
+        let out = self.pop_word();
+
         if jump {
-            self.pop_word()
+            out
         } else {
             Ok(self.regs.pc.wrapping_add(1))
         }
@@ -80,10 +83,11 @@ impl Cpu {
             JumpTest::Always => true,
         };
 
+        let out = self.load_a16();
+
         if jump {
-            self.tick();
             self.push_word(self.regs.pc.wrapping_add(3));
-            self.load_a16()
+            out
         } else {
             Ok(self.regs.pc.wrapping_add(3))
         }

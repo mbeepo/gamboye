@@ -231,6 +231,7 @@ impl Cpu {
     /// - The `carry` flag is set if the output wraps around `65535` to `0`
     pub fn add_hl(&mut self, value: u16) -> u16 {
         let (out, overflowed) = self.regs.get_hl().overflowing_add(value);
+        self.tick();
 
         self.regs.set_nf(false);
         self.regs
@@ -250,6 +251,10 @@ impl Cpu {
     /// - The `carry` flag is set if bit 7 overflows into bit 8
     pub fn add_sp(&mut self, value: i8) -> u16 {
         let out = self.regs.sp.wrapping_add(value as u16);
+
+        // this instruction takes 4 ticks, i think cause it needs to zero extend `value`
+        self.tick();
+        self.tick();
 
         self.regs.set_zf(false);
         self.regs.set_nf(false);
