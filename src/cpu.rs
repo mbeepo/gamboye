@@ -101,7 +101,7 @@ impl Cpu {
             .expect("TAC register uninitialized");
 
         // numbers from here https://pixelbits.16-b.it/GBEDG/timers/#timer-operation
-        // seems backwards, but this way we dont need to shift it after the AND
+        // op order seems backwards, but this way we dont need to shift it after the AND
         let div_bit = match tac & 0b11 {
             0b00 => self.div >> 9 & 1,
             0b01 => self.div >> 3 & 1,

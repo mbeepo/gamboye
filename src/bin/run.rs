@@ -17,18 +17,27 @@ fn main() {
     let mut emu = Gbc::new(mbc, false, true);
     emu.load_rom(&data);
 
+    let mut count = 0;
+
     loop {
         match emu.step() {
             Ok(go) => {
                 if !go {
                     println!("----- STOP instruction reached -----");
-                    println!("Serial buffer: {}", serial_buf);
+                    println!("Serial buffer: {serial_buf}");
                     break;
                 } else {
                     let serial = emu.read_serial();
 
                     if serial != 0xFF {
                         serial_buf += &format!("{}", serial as char);
+                    }
+
+                    count += 1;
+
+                    if count == 25_000 {
+                        count = 0;
+                        println!("Serial buffer: {serial_buf}");
                     }
                 }
             }
