@@ -85,6 +85,7 @@ impl Cpu {
         // render at 60hz (once every 16.66... ms)
         if self.last_render.elapsed().as_nanos() >= 16_667 {
             self.ppu.render(&self.memory);
+            self.last_render = Instant::now();
         }
 
         self.tick_div();

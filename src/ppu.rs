@@ -62,8 +62,6 @@ impl Ppu {
                 // byte pair
                 for e in 0..8 {
                     let relative = i * 16 + e * 2;
-
-                    // these indexes will be multiplied by 2 and combined with the bytes between to get our colors
                     let absolute = match address_type {
                         // 8000 based indexing using unsigned integers, going up to 8FFF
                         AddressType::Unsigned => 0x8000 + relative as u16,
@@ -75,7 +73,7 @@ impl Ppu {
                     let pixels = Self::interleave([pair[0], pair[1]]);
 
                     for (j, pixel) in pixels.iter().enumerate() {
-                        fb[relative + i] = palette[*pixel as usize];
+                        fb[relative + j] = palette[*pixel as usize];
                     }
                 }
             }
