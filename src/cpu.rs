@@ -35,7 +35,8 @@ pub struct Cpu {
     ei_called: u8,
     div: u16,
     div_last: bool,
-    tick: u8,
+    tick: u64,
+    tima_overflow: bool,
 }
 
 impl Cpu {
@@ -55,6 +56,7 @@ impl Cpu {
             div: 0,
             div_last: false,
             tick: 0,
+            tima_overflow: false,
         }
     }
 
@@ -81,6 +83,18 @@ impl Cpu {
     /// Ticks the system by 1 M-cycle, handling interrupts and stepping the PPU
     pub(crate) fn tick(&mut self) {
         self.tick += 1;
+
+        if self.tima_overflow {
+            let mut if_reg = self
+                .memory
+                .load(memory::IF)
+                .expect("Error reading IF register: Uninitialized");
+
+            if_reg |= 1 << 2;
+
+            self.memory.set(memory::IF, if_reg);
+            self.tima_overflow = false;
+        }
 
         // render at 60hz (once every 16.66... ms)
         if self.last_render.elapsed().as_nanos() >= 16_667 {
@@ -124,14 +138,9 @@ impl Cpu {
             self.memory.set(memory::TIMA, tima);
 
             if overflowed {
-                let mut if_reg = self
-                    .memory
-                    .load(memory::IF)
-                    .expect("Error reading IF register: Uninitialized");
-
-                if_reg |= 1 << 2;
-
-                self.memory.set(memory::IF, if_reg);
+                self.tima_overflow = true;
+                println!("M-cycles: {}", self.tick);
+                self.tick = 0;
             }
         }
 
@@ -148,8 +157,6 @@ impl Cpu {
         if self.debug {
             println!("Loading instruction")
         }
-
-        self.tick = 0;
 
         if self.halted {
             let Some(ie) = self
