@@ -17,8 +17,6 @@ fn main() {
     let mut emu = Gbc::new(mbc, false, true);
     emu.load_rom(&data);
 
-    let mut count = 0;
-
     loop {
         match emu.step() {
             Ok(go) => {
@@ -31,13 +29,6 @@ fn main() {
 
                     if serial != 0xFF {
                         serial_buf += &format!("{}", serial as char);
-                    }
-
-                    count += 1;
-
-                    if count == 25_000 {
-                        count = 0;
-                        println!("Serial buffer: {serial_buf}");
                     }
                 }
             }

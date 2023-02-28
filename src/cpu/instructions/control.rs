@@ -57,11 +57,10 @@ impl Cpu {
             JumpTest::Always => true,
         };
 
-        let out = self.pop_word();
-
         if jump {
-            out
+            self.pop_word()
         } else {
+            self.tick();
             Ok(self.regs.pc.wrapping_add(1))
         }
     }
