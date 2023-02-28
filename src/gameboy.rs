@@ -11,7 +11,7 @@ pub struct Gbc {
 impl Gbc {
     pub fn new(mbc: MbcSelector, debug: bool, allow_uninit: bool) -> Self {
         let memory = Mmu::new(mbc);
-        let ppu = Ppu::new_headless(&memory);
+        let ppu = Ppu::new();
         let cpu = Cpu::new(memory, ppu, debug, allow_uninit);
 
         Self { cpu }

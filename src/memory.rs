@@ -190,7 +190,7 @@ impl Mmu {
     /// `start` and `end` are inclusive
     ///
     /// Will return `0` for any uninitialized cells
-    pub fn load_block(&mut self, start: u16, end: u16) -> Vec<u8> {
+    pub fn load_block(&self, start: u16, end: u16) -> Vec<u8> {
         (start..=end).map(|i| self.load(i).unwrap_or(0)).collect()
     }
 

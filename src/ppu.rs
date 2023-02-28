@@ -14,22 +14,22 @@ enum AddressType {
 }
 
 impl Ppu {
-    pub fn new(memory: &Mmu) -> Self {
-        let window = match Window::new("Beef", 320, 288, WindowOptions::default()) {
+    pub fn new() -> Self {
+        let window = match Window::new("Beef", 256, 256, WindowOptions::default()) {
             Ok(win) => Some(win),
             Err(err) => {
                 panic!("Unable to create window {}", err);
             }
         };
-        let lcdc = memory.load(0xFF40).unwrap_or(0);
-        let stat = memory.load(0xFF41).unwrap_or(0);
+        let lcdc = 0;
+        let stat = 0;
 
         Self { window, lcdc, stat }
     }
 
-    pub fn new_headless(memory: &Mmu) -> Self {
-        let lcdc = memory.load(0xFF40).unwrap_or(0);
-        let stat = memory.load(0xFF41).unwrap_or(0);
+    pub fn new_headless() -> Self {
+        let lcdc = 0;
+        let stat = 0;
 
         Self {
             window: None,
@@ -44,9 +44,7 @@ impl Ppu {
     /// I will update this later to work normally, but I just want a basic working display for now
     pub fn render(&mut self, memory: &Mmu) {
         // if rendering is enabled
-        if let Some(window) = &self.window {
-            let mut buf: [u8; 256 * 256];
-            let mut tiles: [[u8; 64]; 128];
+        if let Some(ref mut window) = &mut self.window {
             let address_type = if self.lcdc & (1 << 4) > 0 {
                 // lcdc.4 is set
                 AddressType::Unsigned
@@ -57,11 +55,13 @@ impl Ppu {
             // lightening shades of green
             let palette: [u32; 4] = [0x002200FF, 0x0D2F0DFF, 0xD0F2D0FF, 0xDDFFDDFF];
 
-            // math needed here, i don tunderstand im like little baby :(
+            // frame buffer to pass to window
+            let mut fb: [u32; 256 * 256] = [0; 256 * 256];
+
             for i in 0..=255 {
                 // byte pair
                 for e in 0..8 {
-                    let relative: u8 = i + e * 2;
+                    let relative = i * 16 + e * 2;
 
                     // these indexes will be multiplied by 2 and combined with the bytes between to get our colors
                     let absolute = match address_type {
@@ -70,8 +70,30 @@ impl Ppu {
                         // 9000 based indexing using signed integers, going up to 97FF and down to 8800
                         AddressType::Signed => 0x9000_u16.wrapping_add(relative as i8 as u16),
                     };
+
+                    let pair = memory.load_block(absolute, absolute + 1);
+                    let pixels = Self::interleave([pair[0], pair[1]]);
+
+                    for (j, pixel) in pixels.iter().enumerate() {
+                        fb[relative + i] = palette[*pixel as usize];
+                    }
                 }
             }
+
+            window.update_with_buffer(&fb, 256, 256).unwrap();
         }
+    }
+
+    // combines a bit from each byte to make a palette color
+    fn interleave(bytes: [u8; 2]) -> [u8; 8] {
+        let mut out = [0; 8];
+
+        for i in 0..8 {
+            let high = (bytes[0] & 128 >> i) << 1;
+            let low = bytes[1] & 128 >> i;
+            out[i] = high | low;
+        }
+
+        out
     }
 }
