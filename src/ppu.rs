@@ -15,7 +15,7 @@ enum AddressType {
 
 impl Ppu {
     pub fn new() -> Self {
-        let window = match Window::new("Beef", 256, 256, WindowOptions::default()) {
+        let window = match Window::new("Beef", 512, 512, WindowOptions::default()) {
             Ok(win) => Some(win),
             Err(err) => {
                 panic!("Unable to create window {}", err);
@@ -53,7 +53,7 @@ impl Ppu {
             };
 
             // lightening shades of green
-            let palette: [u32; 4] = [0x002200FF, 0x0D2F0DFF, 0xD0F2D0FF, 0xDDFFDDFF];
+            let palette: [u32; 4] = [0x00002200, 0x000D2F0D, 0x00D0F2D0, 0x00DDFFDD];
 
             // frame buffer to pass to window
             let mut fb: [u32; 256 * 256] = [0; 256 * 256];
