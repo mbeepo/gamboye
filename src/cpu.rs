@@ -9,7 +9,10 @@ use crate::{
 };
 
 use self::{
-    instructions::{ArithmeticTarget, Instruction, StackTarget, WordArithmeticTarget},
+    instructions::{
+        ArithmeticTarget, ByteSource, ByteTarget, Instruction, LoadType, StackTarget,
+        WordArithmeticTarget,
+    },
     registers::Registers,
 };
 
@@ -35,7 +38,6 @@ pub struct Cpu {
     ei_called: u8,
     div: u16,
     div_last: bool,
-    tick: u64,
     tima_overflow: bool,
 }
 
@@ -55,7 +57,6 @@ impl Cpu {
             ei_called: 0,
             div: 0,
             div_last: false,
-            tick: 0,
             tima_overflow: false,
         }
     }
@@ -82,8 +83,6 @@ impl Cpu {
 
     /// Ticks the system by 1 M-cycle, handling interrupts and stepping the PPU
     pub(crate) fn tick(&mut self) {
-        self.tick += 1;
-
         if self.tima_overflow {
             let mut if_reg = self
                 .memory
@@ -139,8 +138,6 @@ impl Cpu {
 
             if overflowed {
                 self.tima_overflow = true;
-                println!("M-cycles: {}", self.tick);
-                self.tick = 0;
             }
         }
 
@@ -195,8 +192,6 @@ impl Cpu {
                 self.regs.pc
             );
         };
-
-        // println!("{instruction_byte:#04X}: {} ticks", self.tick);
 
         // this should only happen on STOP, in which case we should stop the loop
         if next_pc == self.regs.pc {
@@ -272,6 +267,14 @@ impl Cpu {
             println!("Executing instruction");
             dbg!(instruction);
             println!("{}", self.regs);
+        }
+
+        match instruction {
+            Instruction::LD(LoadType::Byte(ByteTarget::B, ByteSource::B)) => {
+                println!("LD B B reached");
+                return Ok(self.regs.pc);
+            }
+            _ => {}
         }
 
         let mut size = 1;
