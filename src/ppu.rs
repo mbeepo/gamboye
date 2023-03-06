@@ -24,6 +24,12 @@ impl Ppu {
         let lcdc = 0;
         let stat = 0;
 
+        let i = Self::interleave([0b11110000, 0b10101010]);
+
+        for e in i {
+            println!("{e:#010b}");
+        }
+
         Self { window, lcdc, stat }
     }
 
@@ -45,7 +51,7 @@ impl Ppu {
     pub fn render(&mut self, memory: &Mmu) {
         // if rendering is enabled
         if let Some(ref mut window) = &mut self.window {
-            let address_type = if self.lcdc & (1 << 4) > 0 {
+            let address_type = if self.lcdc & 1 << 4 == 1 << 4 {
                 // lcdc.4 is set
                 AddressType::Unsigned
             } else {
@@ -58,22 +64,23 @@ impl Ppu {
             // frame buffer to pass to window
             let mut fb: [u32; 256 * 256] = [0; 256 * 256];
 
-            for i in 0..=255 {
-                // byte pair
-                for e in 0..8 {
-                    let relative = i * 16 + e * 2;
-                    let absolute = match address_type {
-                        // 8000 based indexing using unsigned integers, going up to 8FFF
-                        AddressType::Unsigned => 0x8000 + relative as u16,
-                        // 9000 based indexing using signed integers, going up to 97FF and down to 8800
-                        AddressType::Signed => 0x9000_u16.wrapping_add(relative as i8 as u16),
+            for x in 0..32 {
+                for y in 0..32 {
+                    let offset: u16 = x * 32 + y;
+                    let tile_addr = match address_type {
+                        AddressType::Unsigned => 0x8000 + offset,
+                        AddressType::Signed => 0x9000_u16.wrapping_add(offset as i16 as u16),
                     };
 
-                    let pair = memory.load_block(absolute, absolute + 1);
-                    let pixels = Self::interleave([pair[0], pair[1]]);
+                    // get byte pairs
+                    for i in 0..8 {
+                        let pair = memory.load_block(tile_addr, tile_addr + 1);
+                        let pixels = Self::interleave([pair[0], pair[1]]);
 
-                    for (j, pixel) in pixels.iter().enumerate() {
-                        fb[relative + j] = palette[*pixel as usize];
+                        for (j, pixel) in pixels.iter().enumerate() {
+                            fb[offset as usize + i as usize * 8 + j as usize] =
+                                palette[*pixel as usize];
+                        }
                     }
                 }
             }
@@ -87,12 +94,19 @@ impl Ppu {
         let mut out = [0; 8];
 
         for i in 0..8 {
-            let high = (bytes[0] & 0x80 >> i) << 1;
-            let low = bytes[1] & 0x80 >> i;
-            out[i] = high | low;
-        }
+            /// 0x80
+            /// 0x40
+            /// 0x20
+            /// 0x10
+            /// 0x08
+            /// 0x04
+            /// 0x02
+            /// 0x01
+            let high = (bytes[0] & (0x80 >> i)) << 1;
+            let low = bytes[1] & (0x80 >> i);
 
-        dbg!(out);
+            out[i] = (high | low) >> (7 - i);
+        }
 
         out
     }
