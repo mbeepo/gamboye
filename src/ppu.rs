@@ -87,10 +87,12 @@ impl Ppu {
         let mut out = [0; 8];
 
         for i in 0..8 {
-            let high = (bytes[0] & 128 >> i) << 1;
-            let low = bytes[1] & 128 >> i;
+            let high = (bytes[0] & 0x80 >> i) << 1;
+            let low = bytes[1] & 0x80 >> i;
             out[i] = high | low;
         }
+
+        dbg!(out);
 
         out
     }

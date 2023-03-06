@@ -243,12 +243,6 @@ impl Cpu {
                     self.tick();
                     self.tick();
 
-                    println!(
-                        "addr: {:#06X} = {:#04X}",
-                        self.regs.pc,
-                        self.memory.load(self.regs.pc).unwrap()
-                    );
-
                     // pc is pushed to the stack
                     self.push_word(self.regs.pc);
 
@@ -267,14 +261,6 @@ impl Cpu {
             println!("Executing instruction");
             dbg!(instruction);
             println!("{}", self.regs);
-        }
-
-        match instruction {
-            Instruction::LD(LoadType::Byte(ByteTarget::B, ByteSource::B)) => {
-                println!("LD B B reached");
-                return Ok(self.regs.pc);
-            }
-            _ => {}
         }
 
         let mut size = 1;

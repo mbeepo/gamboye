@@ -31,6 +31,7 @@ fn main() {
 
                     if serial != 0xFF {
                         serial_buf += &format!("{}", serial as char);
+                        print!("{}", serial as char);
                     }
                 }
             }
