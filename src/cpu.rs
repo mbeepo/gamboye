@@ -81,7 +81,7 @@ impl Cpu {
         self.memory.load_rom(data);
     }
 
-    /// Ticks the system by 1 M-cycle, handling interrupts and stepping the PPU
+    /// Ticks the system by 1 M-cycle, stepping the PPU and DIV
     pub(crate) fn tick(&mut self) {
         if self.tima_overflow {
             let mut if_reg = self
@@ -183,6 +183,8 @@ impl Cpu {
             (instruction_byte, false)
         };
 
+        let mut jr = false;
+
         let next_pc = if let Some(instruction) = Instruction::from_byte(prefixed, instruction_byte)
         {
             self.execute(instruction)?
@@ -248,6 +250,7 @@ impl Cpu {
 
                     // the ISR address is loaded into pc, taking another cycle
                     self.regs.pc = 0x40 + 0x08 * i as u16;
+
                     self.tick();
                     return;
                 }
