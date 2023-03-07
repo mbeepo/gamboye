@@ -106,7 +106,7 @@ impl Cpu {
 
     fn tick_div(&mut self) {
         // div increases every M-cycle
-        self.div = self.div.wrapping_add(1);
+        self.div = self.div.wrapping_add(4);
         self.memory.set(memory::DIV, (self.div >> 8) as u8);
 
         let tac = self
@@ -169,10 +169,10 @@ impl Cpu {
                 };
 
             if ie & if_reg > 0 {
-                self.regs.ime = true;
-                self.handle_interrupts();
+                self.halted = false;
             }
 
+            self.tick();
             return Ok(true);
         }
 
@@ -182,8 +182,6 @@ impl Cpu {
         } else {
             (instruction_byte, false)
         };
-
-        let mut jr = false;
 
         let next_pc = if let Some(instruction) = Instruction::from_byte(prefixed, instruction_byte)
         {
