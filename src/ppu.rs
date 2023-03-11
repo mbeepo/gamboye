@@ -6,8 +6,8 @@ pub struct Ppu {
     window: Option<Window>,
     lcdc: u8,
     stat: u8,
-    line: u8,
-    fb: [u32; 256 * 256],
+    scanline: u8,
+    fb: [u32; 160 * 144],
 }
 
 enum AddressType {
@@ -17,7 +17,7 @@ enum AddressType {
 
 impl Ppu {
     pub fn new() -> Self {
-        let window = match Window::new("Beef", 512, 512, WindowOptions::default()) {
+        let window = match Window::new("Beef", 320, 288, WindowOptions::default()) {
             Ok(win) => Some(win),
             Err(err) => {
                 panic!("Unable to create window {}", err);
@@ -26,13 +26,13 @@ impl Ppu {
         let lcdc = 0;
         let stat = 0;
         let line = 0;
-        let fb = [0; 256 * 256];
+        let fb = [0; 160 * 144];
 
         Self {
             window,
             lcdc,
             stat,
-            line,
+            scanline: line,
             fb,
         }
     }
@@ -42,13 +42,13 @@ impl Ppu {
         let lcdc = 0;
         let stat = 0;
         let line = 0;
-        let fb = [0; 256 * 256];
+        let fb = [0; 160 * 144];
 
         Self {
             window,
             lcdc,
             stat,
-            line,
+            scanline: line,
             fb,
         }
     }
@@ -67,39 +67,57 @@ impl Ppu {
                 AddressType::Signed
             };
 
+            let bg_map_area = if self.lcdc & 1 << 3 == 1 << 3 {
+                0x9C00
+            } else {
+                0x9800
+            };
+
             // lightening shades of green
-            let palette: [u32; 4] = [0x00002200, 0x000D2F0D, 0x00D0F2D0, 0x00DDFFDD];
+            let palette: [u32; 4] = [0x00004400, 0x000B4F0B, 0x00B0F4B0, 0x00BBFFBB];
 
-            for x in 0..32 {
-                // multiply x by 8 because we read 8 bytes per x value
-                let offset: u16 = x * 8 + self.line as u16 * 256;
+            for x in 0..20 {
+                // tilemap offset, to get the address the actual tile data is at
+                let map_offset: u16 = x + self.scanline as u16 * 32;
+                let offset = memory.load(bg_map_area + map_offset).unwrap_or(0);
                 let tile_addr = match address_type {
-                    AddressType::Unsigned => 0x8000 + offset,
-                    AddressType::Signed => 0x9000_u16.wrapping_add(offset as i16 as u16),
+                    AddressType::Unsigned => 0x8000_u16 + offset as u16,
+                    AddressType::Signed => 0x9000_u16.wrapping_add(offset as i8 as u16),
                 };
+                let v_offset = self.scanline % 8;
+                let pair = memory.load_block(
+                    tile_addr + v_offset as u16 * 2,
+                    tile_addr + v_offset as u16 * 2 + 1,
+                );
 
-                // get byte pairs
-                for i in 0..8 {
-                    //
-                    let pair = memory.load_block(tile_addr + i * 2, tile_addr + i * 2 + 1);
-                    let pixels = Self::interleave([pair[0], pair[1]]);
+                let pixels = Self::interleave([pair[0], pair[1]]);
+                let pixel_offset = x + self.scanline as u16 * 20;
 
-                    for (j, pixel) in pixels.iter().enumerate() {
-                        let idx = offset as usize * 8 + i as usize * 8 + j as usize;
+                println!("pixel_offset: {pixel_offset:#06X}, v_offset: {v_offset}");
 
-                        self.fb[idx] = palette[*pixel as usize];
-                    }
+                for (j, pixel) in pixels.iter().enumerate() {
+                    let idx = pixel_offset as usize * 8 + v_offset as usize + j as usize;
+                    println!("idx: {idx}");
+
+                    self.fb[idx] = palette[*pixel as usize];
                 }
             }
 
-            self.line += 1;
+            self.scanline += 1;
 
-            if self.line == 32 {
-                self.line = 0;
+            if self.scanline == 144 {
+                self.scanline = 0;
+                window.update_with_buffer(&self.fb, 160, 144).unwrap();
             }
-
-            window.update_with_buffer(&self.fb, 256, 256).unwrap();
         }
+    }
+
+    pub fn set_lcdc(&mut self, lcdc: u8) {
+        self.lcdc = lcdc;
+    }
+
+    pub fn set_stat(&mut self, stat: u8) {
+        self.stat = stat;
     }
 
     // combines a bit from each byte to make a palette color

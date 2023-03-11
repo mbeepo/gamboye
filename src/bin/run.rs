@@ -24,8 +24,8 @@ fn main() {
             Ok(go) => {
                 if !go {
                     println!("----- STOP instruction reached -----");
-                    println!("Registers: B: {:#04X} C: {:#04X} D: {:#04X} E: {:#04X} H: {:#04X} L: {:#04X}",
-                        emu.cpu.regs.b, emu.cpu.regs.c, emu.cpu.regs.d, emu.cpu.regs.e, emu.cpu.regs.h, emu.cpu.regs.l);
+                    println!("Registers: A: {:#04X} B: {:#04X} C: {:#04X} D: {:#04X} E: {:#04X} H: {:#04X} L: {:#04X} PC: {:#06X}",
+                        emu.cpu.regs.a, emu.cpu.regs.b, emu.cpu.regs.c, emu.cpu.regs.d, emu.cpu.regs.e, emu.cpu.regs.h, emu.cpu.regs.l, emu.cpu.regs.pc);
                     println!("Serial buffer: {serial_buf}");
                     break;
                 } else {

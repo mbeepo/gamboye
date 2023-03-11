@@ -38,6 +38,7 @@ pub struct Cpu {
     div: u16,
     div_last: bool,
     tima_overflow: bool,
+    stop: bool,
 }
 
 impl Cpu {
@@ -56,6 +57,7 @@ impl Cpu {
             div: 0,
             div_last: false,
             tima_overflow: false,
+            stop: false,
         }
     }
 
@@ -130,6 +132,7 @@ impl Cpu {
             self.memory.set(memory::TIMA, tima);
 
             if overflowed {
+                println!("TIMA overflow");
                 self.tima_overflow = true;
             }
         }
@@ -186,8 +189,7 @@ impl Cpu {
             );
         };
 
-        // this should only happen on STOP, in which case we should stop the loop
-        if next_pc == self.regs.pc {
+        if next_pc == self.regs.pc && self.stop {
             return Ok(false);
         }
 
@@ -252,7 +254,7 @@ impl Cpu {
     /// Executes a single instruction
     pub(crate) fn execute(&mut self, instruction: Instruction) -> Result<u16, u16> {
         if self.debug {
-            println!("Executing instruction");
+            println!("\nExecuting instruction");
             dbg!(instruction);
             println!("{}", self.regs);
         }
@@ -478,7 +480,10 @@ impl Cpu {
                 }
             }
             Instruction::DAA => self.regs.a = self.daa(),
-            Instruction::STOP => return Ok(self.regs.pc),
+            Instruction::STOP => {
+                self.stop = true;
+                return Ok(self.regs.pc);
+            }
             Instruction::HALT => self.halted = true,
             Instruction::NOP => {}
             Instruction::RET(test) => return self.ret(test),
@@ -546,12 +551,23 @@ impl Cpu {
             println!("[SET] {addr:#06X} <- {value:#04X}");
         }
 
-        if addr == memory::DIV {
-            self.div = 0;
-            self.memory.set(memory::DIV, 0);
+        self.tick();
+
+        match addr {
+            memory::DIV => {
+                self.div = 0;
+                self.memory.set(addr, 0);
+                return;
+            }
+            memory::LCDC => {
+                self.ppu.set_lcdc(value);
+            }
+            memory::STAT => {
+                self.ppu.set_stat(value);
+            }
+            _ => {}
         }
 
-        self.tick();
         self.memory.set(addr, value);
     }
 

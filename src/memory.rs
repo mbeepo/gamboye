@@ -16,6 +16,8 @@ pub const DIV: u16 = 0xFF04;
 pub const TIMA: u16 = 0xFF05;
 pub const TMA: u16 = 0xFF06;
 pub const TAC: u16 = 0xFF07;
+pub const LCDC: u16 = 0xFF40;
+pub const STAT: u16 = 0xFF41;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub(crate) enum MmuAddr {
