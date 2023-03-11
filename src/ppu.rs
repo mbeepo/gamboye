@@ -6,7 +6,7 @@ pub struct Ppu {
     window: Option<Window>,
     lcdc: u8,
     stat: u8,
-    line: u16,
+    line: u8,
     fb: [u32; 256 * 256],
 }
 
@@ -71,7 +71,8 @@ impl Ppu {
             let palette: [u32; 4] = [0x00002200, 0x000D2F0D, 0x00D0F2D0, 0x00DDFFDD];
 
             for x in 0..32 {
-                let offset: u16 = x * 32 + self.line;
+                // multiply x by 8 because we read 8 bytes per x value
+                let offset: u16 = x * 8 + self.line as u16 * 256;
                 let tile_addr = match address_type {
                     AddressType::Unsigned => 0x8000 + offset,
                     AddressType::Signed => 0x9000_u16.wrapping_add(offset as i16 as u16),
@@ -79,14 +80,22 @@ impl Ppu {
 
                 // get byte pairs
                 for i in 0..8 {
-                    let pair = memory.load_block(tile_addr, tile_addr + 1);
+                    //
+                    let pair = memory.load_block(tile_addr + i * 2, tile_addr + i * 2 + 1);
                     let pixels = Self::interleave([pair[0], pair[1]]);
 
                     for (j, pixel) in pixels.iter().enumerate() {
-                        let idx = offset as usize * 64 + i as usize * 8 + j as usize;
+                        let idx = offset as usize * 8 + i as usize * 8 + j as usize;
+
                         self.fb[idx] = palette[*pixel as usize];
                     }
                 }
+            }
+
+            self.line += 1;
+
+            if self.line == 32 {
+                self.line = 0;
             }
 
             window.update_with_buffer(&self.fb, 256, 256).unwrap();

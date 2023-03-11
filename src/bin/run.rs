@@ -17,12 +17,14 @@ fn main() {
     let mut emu = Gbc::new(mbc, false, true);
     emu.load_rom(&data);
 
+    emu.cpu.ppu.render(&emu.cpu.memory);
+
     loop {
         match emu.step() {
             Ok(go) => {
                 if !go {
                     println!("----- STOP instruction reached -----");
-                    println!("Registers: B: {:#04X} C: {:#04X} D: {:#04X} E: {:#04X} H: {:#04X} L: {:#04X}", 
+                    println!("Registers: B: {:#04X} C: {:#04X} D: {:#04X} E: {:#04X} H: {:#04X} L: {:#04X}",
                         emu.cpu.regs.b, emu.cpu.regs.c, emu.cpu.regs.d, emu.cpu.regs.e, emu.cpu.regs.h, emu.cpu.regs.l);
                     println!("Serial buffer: {serial_buf}");
                     break;

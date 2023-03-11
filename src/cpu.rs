@@ -32,7 +32,6 @@ pub struct Cpu {
     pub tick_duration: u128,
     pub last_tick: Instant,
     pub halted: bool,
-    pub last_render: Instant,
     pub debug: bool,
     pub allow_uninit: bool,
     ei_called: u8,
@@ -51,7 +50,6 @@ impl Cpu {
             tick_duration: NORMAL_TICK_DURATION,
             last_tick: Instant::now(),
             halted: false,
-            last_render: Instant::now(),
             debug,
             allow_uninit,
             ei_called: 0,
@@ -95,12 +93,7 @@ impl Cpu {
             self.tima_overflow = false;
         }
 
-        // render at 60hz (once every 16.66... ms)
-        if self.last_render.elapsed().as_nanos() >= 16_667 {
-            self.ppu.render(&self.memory);
-            self.last_render = Instant::now();
-        }
-
+        self.ppu.render(&self.memory);
         self.tick_div();
     }
 
