@@ -60,6 +60,8 @@ impl Ppu {
     pub fn render(&mut self, memory: &Mmu) {
         // if rendering is enabled
         if let Some(ref mut window) = &mut self.window {
+            println!("Scanline {}", self.scanline);
+
             let address_type = if self.lcdc & 1 << 4 == 1 << 4 {
                 // lcdc.4 is set
                 AddressType::Unsigned
@@ -84,19 +86,22 @@ impl Ppu {
                     AddressType::Unsigned => 0x8000_u16 + offset as u16,
                     AddressType::Signed => 0x9000_u16.wrapping_add(offset as i8 as u16),
                 };
-                let v_offset = self.scanline % 8;
+                let v_offset = (self.scanline % 8);
                 let pair = memory.load_block(
                     tile_addr + v_offset as u16 * 2,
                     tile_addr + v_offset as u16 * 2 + 1,
                 );
 
                 let pixels = Self::interleave([pair[0], pair[1]]);
-                let pixel_offset = x + self.scanline as u16 * 20;
+                let pixel_offset = x * 8 + self.scanline as u16 * 20;
 
-                println!("pixel_offset: {pixel_offset:#06X}, v_offset: {v_offset}");
+                println!(
+                    "x:\t{x}\nscanline:\t{}\npixel_offset:\t{pixel_offset}\nv_offset:\t{v_offset}",
+                    self.scanline
+                );
 
                 for (j, pixel) in pixels.iter().enumerate() {
-                    let idx = pixel_offset as usize * 8 + v_offset as usize + j as usize;
+                    let idx = pixel_offset as usize + v_offset as usize + j as usize;
                     println!("idx: {idx}");
 
                     self.fb[idx] = palette[*pixel as usize];
@@ -107,6 +112,7 @@ impl Ppu {
 
             if self.scanline == 144 {
                 self.scanline = 0;
+                panic!("End of the line bucko");
                 window.update_with_buffer(&self.fb, 160, 144).unwrap();
             }
         }
