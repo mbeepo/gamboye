@@ -2,12 +2,29 @@ use minifb::{Window, WindowOptions};
 
 use crate::Mmu;
 
+// lightening shades of green
+const PALETTE: [u32; 4] = [0x00004400, 0x000B4F0B, 0x00B0F4B0, 0x00BBFFBB];
+
+// screen and sprite dimensions
+const WIDTH: u8 = 160;
+const HEIGHT: u8 = 144;
+const TILE_WIDTH: u8 = 8;
+const TILE_HEIGHT: u8 = 8;
+
+// number of tiles that fit horizontally and vertically
+const WIDTH_IN_TILES: u8 = WIDTH / TILE_WIDTH;
+const HEIGHT_IN_TILES: u8 = HEIGHT / TILE_HEIGHT;
+
+// base addresses for the different tile data addressing modes
+const UNSIGNED_BASE: u16 = 0x8000;
+const SIGNED_BASE: u16 = 0x9000;
+
 pub struct Ppu {
     window: Option<Window>,
     lcdc: u8,
     stat: u8,
-    coords: (u8, u8),
-    fb: [u32; 160 * 144],
+    coords: PpuCoords,
+    fb: [u32; WIDTH as usize * HEIGHT as usize],
 }
 
 enum AddressType {
@@ -15,12 +32,19 @@ enum AddressType {
     Signed,
 }
 
-// lightening shades of green
-const PALETTE: [u32; 4] = [0x00004400, 0x000B4F0B, 0x00B0F4B0, 0x00BBFFBB];
+struct PpuCoords {
+    x: u8,
+    y: u8,
+}
 
 impl Ppu {
     pub fn new() -> Self {
-        let window = match Window::new("Beef", 320, 288, WindowOptions::default()) {
+        let window = match Window::new(
+            "Beef",
+            WIDTH as usize * 2,
+            HEIGHT as usize * 2,
+            WindowOptions::default(),
+        ) {
             Ok(win) => Some(win),
             Err(err) => {
                 panic!("Unable to create window {}", err);
@@ -28,8 +52,8 @@ impl Ppu {
         };
         let lcdc = 0;
         let stat = 0;
-        let coords = (0, 0);
-        let fb = [0; 160 * 144];
+        let coords = PpuCoords { x: 0, y: 0 };
+        let fb = [0; WIDTH as usize * HEIGHT as usize];
 
         Self {
             window,
@@ -44,8 +68,8 @@ impl Ppu {
         let window = None;
         let lcdc = 0;
         let stat = 0;
-        let coords = (0, 0);
-        let fb = [0; 160 * 144];
+        let coords = PpuCoords { x: 0, y: 0 };
+        let fb = [0; WIDTH as usize * HEIGHT as usize];
 
         Self {
             window,
@@ -70,35 +94,50 @@ impl Ppu {
                 AddressType::Signed
             };
 
-            let bg_map_area = if self.lcdc & 1 << 3 == 1 << 3 {
+            let bg_map_area: u16 = if self.lcdc & 1 << 3 == 1 << 3 {
                 0x9C00
             } else {
                 0x9800
             };
 
             // 20 tiles horizontally and 16 vertically
-            let tile_x = self.coords.0 / 20;
-            let tile_y = self.coords.1 / 16;
-            let tilemap_offset = tile_x + tile_y * 20;
+            let tile_x = self.coords.x / WIDTH_IN_TILES;
+            let tile_y = self.coords.y / HEIGHT_IN_TILES;
+            let tilemap_offset = tile_x as usize + tile_y as usize * WIDTH_IN_TILES as usize;
 
-            // the byte in the tilemap points to the offset at the start of the tile in tile data
-            let tilemap_addr = bg_map_area + tilemap_offset;
-            let tile_data_offset = memory.load(tilemap_addr);
-            let 
+            // the byte in the tilemap points to the offset of the tile data
+            let tilemap_addr = bg_map_area + tilemap_offset as u16;
+            let tile_data_offset = memory.load(tilemap_addr).unwrap_or(0);
+            let tile_data_addr = address_type.convert_offset(tile_data_offset);
 
             // get the current line of the tile data
+            // 2 bytes per sprite row, combined into 8 2-bit values
+            let tiles = memory.load_block(tile_data_addr, tile_data_addr + 1);
 
+            // horizontal offset within the sprite
+            // we're just rendering one here
+            // this will make more sense when we implement the FIFO
+            let x_offset = self.coords.x % TILE_WIDTH;
 
-            self.coords.0 += 1;
+            // extract relevant bits
+            let high = tiles[0] >> x_offset & 1;
+            let low = tiles[1] >> x_offset & 1;
 
-            if self.coords.0 == 160 {
-                self.coords.0 = 0;
-                self.coords.1 += 1;
+            // high gets shifted up to fill in the upper bit
+            let color_value = (high << 1) | low;
+            let color = PALETTE[color_value as usize];
 
-                if self.coords.1 == 144 {
-                    panic!("End of the line bucko");
+            self.fb[tilemap_offset as usize] = color;
+
+            self.coords.x += 1;
+
+            if self.coords.x == WIDTH {
+                self.coords.x = 0;
+                self.coords.y += 1;
+
+                if self.coords.y == HEIGHT {
                     window
-                        .update_with_buffer(&self.fb, 160, 144)
+                        .update_with_buffer(&self.fb, WIDTH as usize, HEIGHT as usize)
                         .expect("Couldn't draw to window");
                 }
             }
@@ -125,5 +164,14 @@ impl Ppu {
         }
 
         out
+    }
+}
+
+impl AddressType {
+    fn convert_offset(&self, offset: u8) -> u16 {
+        match self {
+            AddressType::Unsigned => UNSIGNED_BASE + offset as u16,
+            AddressType::Signed => SIGNED_BASE.wrapping_add(offset as i8 as u16),
+        }
     }
 }
