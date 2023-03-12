@@ -6,7 +6,7 @@ pub struct Ppu {
     window: Option<Window>,
     lcdc: u8,
     stat: u8,
-    scanline: u8,
+    coords: (u8, u8),
     fb: [u32; 160 * 144],
 }
 
@@ -14,6 +14,9 @@ enum AddressType {
     Unsigned,
     Signed,
 }
+
+// lightening shades of green
+const PALETTE: [u32; 4] = [0x00004400, 0x000B4F0B, 0x00B0F4B0, 0x00BBFFBB];
 
 impl Ppu {
     pub fn new() -> Self {
@@ -25,14 +28,14 @@ impl Ppu {
         };
         let lcdc = 0;
         let stat = 0;
-        let line = 0;
+        let coords = (0, 0);
         let fb = [0; 160 * 144];
 
         Self {
             window,
             lcdc,
             stat,
-            scanline: line,
+            coords,
             fb,
         }
     }
@@ -41,14 +44,14 @@ impl Ppu {
         let window = None;
         let lcdc = 0;
         let stat = 0;
-        let line = 0;
+        let coords = (0, 0);
         let fb = [0; 160 * 144];
 
         Self {
             window,
             lcdc,
             stat,
-            scanline: line,
+            coords,
             fb,
         }
     }
@@ -60,8 +63,6 @@ impl Ppu {
     pub fn render(&mut self, memory: &Mmu) {
         // if rendering is enabled
         if let Some(ref mut window) = &mut self.window {
-            println!("Scanline {}", self.scanline);
-
             let address_type = if self.lcdc & 1 << 4 == 1 << 4 {
                 // lcdc.4 is set
                 AddressType::Unsigned
@@ -75,45 +76,31 @@ impl Ppu {
                 0x9800
             };
 
-            // lightening shades of green
-            let palette: [u32; 4] = [0x00004400, 0x000B4F0B, 0x00B0F4B0, 0x00BBFFBB];
+            // 20 tiles horizontally and 16 vertically
+            let tile_x = self.coords.0 / 20;
+            let tile_y = self.coords.1 / 16;
+            let tilemap_offset = tile_x + tile_y * 20;
 
-            for x in 0..20 {
-                // tilemap offset, to get the address the actual tile data is at
-                let map_offset: u16 = x + self.scanline as u16 * 32;
-                let offset = memory.load(bg_map_area + map_offset).unwrap_or(0);
-                let tile_addr = match address_type {
-                    AddressType::Unsigned => 0x8000_u16 + offset as u16,
-                    AddressType::Signed => 0x9000_u16.wrapping_add(offset as i8 as u16),
-                };
-                let v_offset = (self.scanline % 8);
-                let pair = memory.load_block(
-                    tile_addr + v_offset as u16 * 2,
-                    tile_addr + v_offset as u16 * 2 + 1,
-                );
+            // the byte in the tilemap points to the offset at the start of the tile in tile data
+            let tilemap_addr = bg_map_area + tilemap_offset;
+            let tile_data_offset = memory.load(tilemap_addr);
+            let 
 
-                let pixels = Self::interleave([pair[0], pair[1]]);
-                let pixel_offset = x * 8 + self.scanline as u16 * 20;
+            // get the current line of the tile data
 
-                println!(
-                    "x:\t{x}\nscanline:\t{}\npixel_offset:\t{pixel_offset}\nv_offset:\t{v_offset}",
-                    self.scanline
-                );
 
-                for (j, pixel) in pixels.iter().enumerate() {
-                    let idx = pixel_offset as usize + v_offset as usize + j as usize;
-                    println!("idx: {idx}");
+            self.coords.0 += 1;
 
-                    self.fb[idx] = palette[*pixel as usize];
+            if self.coords.0 == 160 {
+                self.coords.0 = 0;
+                self.coords.1 += 1;
+
+                if self.coords.1 == 144 {
+                    panic!("End of the line bucko");
+                    window
+                        .update_with_buffer(&self.fb, 160, 144)
+                        .expect("Couldn't draw to window");
                 }
-            }
-
-            self.scanline += 1;
-
-            if self.scanline == 144 {
-                self.scanline = 0;
-                panic!("End of the line bucko");
-                window.update_with_buffer(&self.fb, 160, 144).unwrap();
             }
         }
     }
