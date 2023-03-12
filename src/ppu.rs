@@ -100,13 +100,19 @@ impl Ppu {
                 0x9800
             };
 
-            // 20 tiles horizontally and 16 vertically
-            let tile_x = self.coords.x / WIDTH_IN_TILES;
-            let tile_y = self.coords.y / HEIGHT_IN_TILES;
+            let tile_x = self.coords.x / TILE_WIDTH;
+            let tile_y = self.coords.y / TILE_HEIGHT;
             let tilemap_offset = tile_x as usize + tile_y as usize * WIDTH_IN_TILES as usize;
+            let tilemap_addr = bg_map_area + tilemap_offset as u16;
+
+            println!("{tilemap_addr:#06X}");
+
+            if tilemap_addr == 0x9A00 {
+                println!("0x9A00");
+                println!("\ttile addr: {tilemap_addr:#06X}, bg map: {bg_map_area:#06X}, offset: {tilemap_offset:#06X}");
+            }
 
             // the byte in the tilemap points to the offset of the tile data
-            let tilemap_addr = bg_map_area + tilemap_offset as u16;
             let tile_data_offset = memory.load(tilemap_addr).unwrap_or(0);
             let tile_data_addr = address_type.convert_offset(tile_data_offset);
 
@@ -127,7 +133,7 @@ impl Ppu {
             let color_value = (high << 1) | low;
             let color = PALETTE[color_value as usize];
 
-            self.fb[tilemap_offset as usize] = color;
+            self.fb[self.coords.x as usize + self.coords.y as usize * WIDTH as usize] = color;
 
             self.coords.x += 1;
 
@@ -136,6 +142,7 @@ impl Ppu {
                 self.coords.y += 1;
 
                 if self.coords.y == HEIGHT {
+                    self.coords.y = 0;
                     window
                         .update_with_buffer(&self.fb, WIDTH as usize, HEIGHT as usize)
                         .expect("Couldn't draw to window");

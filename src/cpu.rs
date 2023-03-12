@@ -39,6 +39,7 @@ pub struct Cpu {
     div_last: bool,
     tima_overflow: bool,
     stop: bool,
+    tick: usize,
 }
 
 impl Cpu {
@@ -58,6 +59,7 @@ impl Cpu {
             div_last: false,
             tima_overflow: false,
             stop: false,
+            tick: 0,
         }
     }
 
@@ -83,6 +85,7 @@ impl Cpu {
 
     /// Ticks the system by 1 M-cycle, stepping the PPU and DIV
     pub(crate) fn tick(&mut self) {
+        self.tick += 1;
         if self.tima_overflow {
             let mut if_reg = self
                 .memory
@@ -132,7 +135,6 @@ impl Cpu {
             self.memory.set(memory::TIMA, tima);
 
             if overflowed {
-                println!("TIMA overflow");
                 self.tima_overflow = true;
             }
         }
