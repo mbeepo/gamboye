@@ -3,7 +3,7 @@ use minifb::{Window, WindowOptions};
 use crate::Mmu;
 
 // lightening shades of green
-const PALETTE: [u32; 4] = [0x00004400, 0x000B4F0B, 0x00B0F4B0, 0x00BBFFBB];
+const PALETTE: [u32; 4] = [0x00000000, 0x00555555, 0x00AAAAAA, 0x00FFFFFF];
 
 // screen and sprite dimensions
 const WIDTH: u8 = 160;
@@ -103,39 +103,17 @@ impl Ppu {
             let tile_y = self.coords.y / TILE_HEIGHT;
             let tilemap_offset = tile_x as usize + tile_y as usize * WIDTH_IN_TILES as usize;
             let tilemap_addr = bg_map_area + tilemap_offset as u16;
-
-            // if tilemap_offset == 0 {
-            //     println!("tilemap_offset = 0, tilemap_addr = ${tilemap_addr:04X}");
-            // }
-
             // the byte in the tilemap points to the offset of the tile data
             let tile_data_offset = memory.load(tilemap_addr).unwrap_or(0);
 
-            /// first tile
-            /// 0x00 - $9000
-            /// 0x01 - $9001
-            /// 0x02 - $9002
-            /// 0x03 - $9003
-            /// ...
-            /// 0x0F - $900F
-            /// second tile
-            /// 0x10 - $9010
-            ///
-            ///
-            // add y % 2h to get the offset within the offset
+            // calculate the offset of the tile data for the current line
             let tile_data_addr = address_type.convert_offset(
-                tile_data_offset as u16
-                    + (self.coords.y as u16 % (TILE_HEIGHT as u16 * 2)) * WIDTH as u16,
+                tile_data_offset as u16 * 0xF + (self.coords.y as u16 % TILE_HEIGHT as u16) * 2,
             );
 
             // get the current line of the tile data
             // 2 bytes per sprite row, combined into 8 2-bit values
             let tiles = memory.load_block(tile_data_addr, tile_data_addr + 1);
-
-            if tile_data_offset > 0 {
-                println!("positive tile reference (${tile_data_addr:04X})");
-                dbg!(&tiles);
-            }
 
             // horizontal offset within the sprite
             // we're just rendering one here

@@ -68,14 +68,9 @@ impl Cpu {
             if self.last_tick.elapsed().as_nanos() >= self.tick_duration {
                 self.last_tick = Instant::now();
 
-                // Err means
+                // Err means there was an attempt to read from uninitialized memory
                 if let Err(_) = self.step() {}
             }
-
-            // normal speed ticks every ~238ns, and double speed ticks every ~119ns
-            // waiting 40ns should get us close
-            // we sleep even when we step, yes this is intended future bee
-            thread::sleep(Duration::from_nanos(40));
         }
     }
 
@@ -566,15 +561,6 @@ impl Cpu {
             }
             memory::STAT => {
                 self.ppu.set_stat(value);
-            }
-            0x9800 => {
-                println!("Wrote {value} to $9800");
-
-                let addr = 0x9010 + value as u16;
-                let tiles = self.memory.load_block(addr, addr + 1);
-
-                println!("Value of 0x9010 and 0x9011:");
-                dbg!(tiles);
             }
             _ => {}
         }
