@@ -567,6 +567,15 @@ impl Cpu {
             memory::STAT => {
                 self.ppu.set_stat(value);
             }
+            0x9800 => {
+                println!("Wrote {value} to $9800");
+
+                let addr = 0x9010 + value as u16;
+                let tiles = self.memory.load_block(addr, addr + 1);
+
+                println!("Value of 0x9010 and 0x9011:");
+                dbg!(tiles);
+            }
             _ => {}
         }
 
