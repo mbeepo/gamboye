@@ -113,16 +113,16 @@ impl Ppu {
 
             // get the current line of the tile data
             // 2 bytes per sprite row, combined into 8 2-bit values
-            let tiles = memory.load_block(tile_data_addr, tile_data_addr + 1);
+            let tiles = memory.load_block(tile_data_addr, tile_data_addr + TILE_WIDTH as u16);
 
             // horizontal offset within the sprite
             // we're just rendering one here
             // this will make more sense when we implement the FIFO
-            let x_offset = self.coords.x % TILE_WIDTH;
+            let x_offset = TILE_WIDTH - 1 - self.coords.x % TILE_WIDTH;
 
             // extract relevant bits
-            let high = tiles[0] >> x_offset & 1;
-            let low = tiles[1] >> x_offset & 1;
+            let low = tiles[0] >> x_offset & 1;
+            let high = tiles[1] >> x_offset & 1;
 
             // high gets shifted up to fill in the upper bit
             let color_value = (high << 1) | low;
