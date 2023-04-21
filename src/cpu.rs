@@ -140,9 +140,9 @@ impl Cpu {
     /// Executes a CPU instruction and moves the PC to its next position.
     ///
     /// ### Return Variants
-    /// - Returns `Some(true)` if operation should continue
-    /// - Returns `Some(false)` if STOP was called and execution should stop
-    /// - Returns `Err(addr)` if there was an attempt to read from uninitialized memory
+    /// - `Ok(true)` if operation should continue
+    /// - `Ok(false)` if STOP was called and execution should stop
+    /// - `Err(addr)` if there was an attempt to read from uninitialized memory
     pub(crate) fn step(&mut self) -> Result<bool, u16> {
         if self.debug {
             println!("Loading instruction")
@@ -194,7 +194,7 @@ impl Cpu {
 
         // the effects of ei are delayed by one instruction
         if self.ei_called == 1 {
-            self.ei_called += 1;
+            self.ei_called = 2;
         } else if self.ei_called == 2 {
             self.ei();
             self.ei_called = 0;
@@ -514,8 +514,8 @@ impl Cpu {
     /// Loads a byte from memory and ticks an M-cycle
     ///
     /// ### Return Variants
-    /// - Returns `Ok(value)` if a byte was read successfully
-    /// - Returns `Err(addr)` if the byte at the address was uninitialized, and `Self::allow_uninit` is false
+    /// - `Ok(value)` if a byte was read successfully
+    /// - `Err(addr)` if the byte at the address was uninitialized, and `Self::allow_uninit` is false
     fn mem_load(&mut self, addr: u16) -> Result<u8, u16> {
         if self.debug {
             print!("[LOAD] {addr:#06X}");

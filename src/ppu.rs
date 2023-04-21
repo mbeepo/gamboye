@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use minifb::{Window, WindowOptions};
 
 use crate::Mmu;
@@ -25,6 +27,7 @@ pub struct Ppu {
     stat: u8,
     coords: PpuCoords,
     fb: [u32; WIDTH as usize * HEIGHT as usize],
+    last_frame: Instant,
 }
 
 enum AddressType {
@@ -40,7 +43,7 @@ struct PpuCoords {
 impl Ppu {
     pub fn new() -> Self {
         let window = match Window::new(
-            "Beef",
+            "Beef Wellington",
             WIDTH as usize * 2,
             HEIGHT as usize * 2,
             WindowOptions::default(),
@@ -54,6 +57,7 @@ impl Ppu {
         let stat = 0;
         let coords = PpuCoords { x: 0, y: 0 };
         let fb = [0; WIDTH as usize * HEIGHT as usize];
+        let last_frame = Instant::now();
 
         Self {
             window,
@@ -61,6 +65,7 @@ impl Ppu {
             stat,
             coords,
             fb,
+            last_frame,
         }
     }
 
@@ -70,6 +75,7 @@ impl Ppu {
         let stat = 0;
         let coords = PpuCoords { x: 0, y: 0 };
         let fb = [0; WIDTH as usize * HEIGHT as usize];
+        let last_frame = Instant::now();
 
         Self {
             window,
@@ -77,23 +83,20 @@ impl Ppu {
             stat,
             coords,
             fb,
+            last_frame,
         }
     }
-
-    /// [TEMPORARY] Renders VRAM to the window
-    /// This version renders the whole screen in the space of a single cycle, so nothing can change in the middle
-    /// It also only uses the 4 color DMG palette
-    /// I will update this later to work normally, but I just want a basic working display for now
+    
     pub fn render(&mut self, memory: &Mmu) {
         // if rendering is enabled
         if let Some(ref mut window) = &mut self.window {
-            let address_type = if self.lcdc & 1 << 4 == 1 << 4 {
+            let address_type = if self.lcdc & 1 << 4 > 0 {
                 AddressType::Unsigned
             } else {
                 AddressType::Signed
             };
 
-            let bg_map_area: u16 = if self.lcdc & 1 << 3 == 1 << 3 {
+            let bg_map_area: u16 = if self.lcdc & 1 << 3 > 0 {
                 0x9C00
             } else {
                 0x9800
@@ -103,6 +106,7 @@ impl Ppu {
             let tile_y = self.coords.y / TILE_HEIGHT;
             let tilemap_offset = tile_x as usize + tile_y as usize * WIDTH_IN_TILES as usize;
             let tilemap_addr = bg_map_area + tilemap_offset as u16;
+
             // the byte in the tilemap points to the offset of the tile data
             let tile_data_offset = memory.load(tilemap_addr).unwrap_or(0);
 
@@ -141,12 +145,16 @@ impl Ppu {
                     window
                         .update_with_buffer(&self.fb, WIDTH as usize, HEIGHT as usize)
                         .expect("Couldn't draw to window");
+                    
+                    let us = self.last_frame.elapsed().as_micros();
+                    println!("{us:05}us");
+                    self.last_frame = Instant::now();
                 }
             }
         }
     }
-
     pub fn set_lcdc(&mut self, lcdc: u8) {
+
         self.lcdc = lcdc;
     }
 

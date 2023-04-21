@@ -124,8 +124,8 @@ impl Mmu {
     /// Attempts to retrieve a byte of data from memory at the address `addr`
     ///
     /// ### Return Variants
-    /// - Returns `Some<u8>` if the selected cell is initialized
-    /// - Returns `None` if the selected cell is uninitialized
+    /// - `Some<u8>` if the selected cell is initialized
+    /// - `None` if the selected cell is uninitialized
     pub fn load(&self, addr: u16) -> Option<u8> {
         match Self::translate(addr) {
             MmuAddr::Mbc(a) => self.mbc.load(a),

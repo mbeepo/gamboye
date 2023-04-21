@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Instant};
 
 use clap::Parser;
 use gbc::{Gbc, MbcSelector, RamSize, RomSize};
@@ -47,11 +47,16 @@ fn main() {
                     println!("Serial buffer: {serial_buf}");
                     break;
                 } else {
+                    let now = Instant::now();
+
                     let serial = emu.read_serial();
 
                     if serial != 0xFF {
                         serial_buf += &format!("{}", serial as char);
                     }
+
+                    let ns = now.elapsed().as_nanos();
+                    println!("{ns:05}ns - serial");
                 }
             }
             Err(addr) => {
