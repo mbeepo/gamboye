@@ -1,15 +1,16 @@
 use std::io::Write;
 
-use gbc::{Gbc, MbcSelector, RamSize, RomSize};
+use gbc::{Gbc, MbcSelector, RamSize, RomSize, MBC_ADDR};
 
 fn main() {
+    println!("Start");
     let filename = std::env::args().nth(1).unwrap();
     let data = std::fs::read(filename).unwrap();
 
     let rom_size = RomSize::from_byte(data[0x0148]);
     let ram_size = RamSize::from_byte(data[0x0149]);
 
-    let mbc = match data[0x0147] {
+    let mbc = match data[MBC_ADDR] {
         0x00 => MbcSelector::NoMbc,
         0x01 => MbcSelector::Mbc1(rom_size, ram_size),
         _ => panic!("Unsupported MBC"),

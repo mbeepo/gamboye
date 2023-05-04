@@ -1,7 +1,7 @@
 use std::{path::PathBuf, time::Instant};
 
 use clap::Parser;
-use gbc::{Gbc, MbcSelector, RamSize, RomSize};
+use gbc::{Gbc, MbcSelector, RamSize, RomSize, MBC_ADDR};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
