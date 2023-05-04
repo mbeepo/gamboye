@@ -4,6 +4,8 @@ use crate::{
     ppu::Ppu,
 };
 
+pub const MBC_ADDR: usize = 0x0147;
+
 pub struct Gbc {
     pub cpu: Cpu,
 }
@@ -11,14 +13,15 @@ pub struct Gbc {
 impl Gbc {
     pub fn new(mbc: MbcSelector, debug: bool, allow_uninit: bool) -> Self {
         let memory = Mmu::new(mbc);
-        let ppu = Ppu::new();
-        // let ppu = Ppu::new_headless();
+        // let ppu = Ppu::new();
+        let ppu = Ppu::new_headless();
         let cpu = Cpu::new(memory, ppu, debug, allow_uninit);
 
         Self { cpu }
     }
 
     pub fn load_rom(&mut self, data: &[u8]) {
+        println!("[EMU] Loading rom");
         self.cpu.load_rom(data);
     }
 

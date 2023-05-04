@@ -95,20 +95,26 @@ impl Mbc for Mbc1 {
         let mut bank = 0;
         let mut i = 0;
         let len = data.len();
+        println!("[MBC] Loading rom");
 
         while i < len {
+            println!("\tBank #{bank}");
+
+            // panic if the bank number is larger than the amount of banks in this mbc
             if bank >= self.rom.len() {
                 panic!("ROM is of insufficient size using specified values");
             }
 
+            // the number of bytes to move into the current bank
             let offset = if len - i >= 0x4000 { 0x4000 } else { len - i };
 
+            // move all bytes that belong in this bank into this bank
             for e in i..i + offset {
                 self.rom[bank][e - i] = Some(data[e]);
             }
 
+            // move onto the next bank, and add `offset` to `i` cause we're past that now
             bank += 1;
-
             i += offset;
         }
     }

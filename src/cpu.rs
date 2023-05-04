@@ -78,11 +78,13 @@ impl Cpu {
     }
 
     pub(crate) fn load_rom(&mut self, data: &[u8]) {
+        println!("[CPU] Loading rom");
         self.memory.load_rom(data);
     }
 
     /// Ticks the system by 1 M-cycle, stepping the PPU and DIV
     pub(crate) fn tick(&mut self) {
+        // there is a single tick delay between TIMA overflowing and IF.2 being set
         if self.tima_overflow {
             let mut if_reg = self
                 .memory
@@ -110,7 +112,6 @@ impl Cpu {
             .expect("TAC register uninitialized");
 
         // numbers from here https://pixelbits.16-b.it/GBEDG/timers/#timer-operation
-        // op order seems backwards, but this way we dont need to shift it after the AND
         let div_bit = match tac & 0b11 {
             0b00 => self.div >> 9 & 1,
             0b01 => self.div >> 3 & 1,

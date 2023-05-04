@@ -151,6 +151,7 @@ impl Mmu {
     }
 
     pub fn load_rom(&mut self, data: &[u8]) {
+        println!("[MMU] Loading rom");
         self.mbc.load_rom(data);
     }
 
