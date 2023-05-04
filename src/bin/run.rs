@@ -47,16 +47,16 @@ fn main() {
                     println!("Serial buffer: {serial_buf}");
                     break;
                 } else {
-                    let now = Instant::now();
-
                     let serial = emu.read_serial();
 
                     if serial != 0xFF {
-                        serial_buf += &format!("{}", serial as char);
+                        if serial == b'\n' {
+                            println!("{serial_buf}");
+                            serial_buf = String::new();
+                        } else {
+                            serial_buf += &format!("{}", serial as char);
+                        }
                     }
-
-                    let ns = now.elapsed().as_nanos();
-                    println!("{ns:05}ns - serial");
                 }
             }
             Err(addr) => {

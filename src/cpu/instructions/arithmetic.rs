@@ -230,12 +230,13 @@ impl Cpu {
     /// - The `half carry` flag is set if bit 11 overflows into bit 12
     /// - The `carry` flag is set if the output wraps around `65535` to `0`
     pub fn add_hl(&mut self, value: u16) -> u16 {
-        let (out, overflowed) = self.regs.get_hl().overflowing_add(value);
+        let hl = self.regs.get_hl();
+        let (out, overflowed) = hl.overflowing_add(value);
         self.tick();
 
         self.regs.set_nf(false);
         self.regs
-            .set_hf((self.regs.get_hl() & 0x0F) + (value & 0x0F) > 0x0F);
+            .set_hf((self.regs.get_hl() & 0x0FFF) + (value & 0x0FFF) > 0x0FFF);
 
         self.regs.set_cf(overflowed);
 

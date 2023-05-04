@@ -23,6 +23,7 @@ const NORMAL_MHZ: f64 = 1.048576;
 const FAST_MHZ: f64 = 2.097152;
 const NORMAL_TICK_DURATION: u128 = (1000.0 / NORMAL_MHZ) as u128;
 const FAST_TICK_DURATION: u128 = (1000.0 / FAST_MHZ) as u128;
+const EXT_PREFIX: u8 = 0xCB;
 
 pub struct Cpu {
     pub regs: Registers,
@@ -170,7 +171,7 @@ impl Cpu {
         }
 
         let instruction_byte = self.mem_load(self.regs.pc)?;
-        let (instruction_byte, prefixed) = if instruction_byte == 0xCB {
+        let (instruction_byte, prefixed) = if instruction_byte == EXT_PREFIX {
             (self.load_d8()?, true)
         } else {
             (instruction_byte, false)
@@ -186,7 +187,7 @@ impl Cpu {
             );
         };
 
-        if next_pc == self.regs.pc && self.stop {
+        if self.stop {
             return Ok(false);
         }
 

@@ -4,7 +4,7 @@ use gbc::{Gbc, MbcSelector, RamSize, RomSize};
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("init", |b| b.iter(|| init()));
     c.bench_function("load acid", |b| b.iter(|| load_acid()));
-    // c.bench_function("load instruction", |b| b.iter(|| load_instr(black_box(load_acid()))));
+    c.bench_function("load instruction", |b| b.iter(|| load_instr(load_acid())));
 }
 
 fn init() {

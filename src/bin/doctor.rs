@@ -16,7 +16,7 @@ fn main() {
         _ => panic!("Unsupported MBC"),
     };
 
-    let mut emu = Gbc::new(mbc, false, true);
+    let mut emu = Gbc::new_headless(mbc, false, true);
     emu.load_rom(&data);
 
     let mut file = std::fs::OpenOptions::new()
@@ -39,7 +39,7 @@ fn main() {
                 if !go {
                     println!("----- STOP instruction reached -----");
                     println!("Serial buffer: {}", serial_buf);
-                    break;
+                    return;
                 } else {
                     let pc = emu.cpu.regs.pc;
                     let pcmem = emu.cpu.memory.load_block(pc, pc + 3);
@@ -51,7 +51,12 @@ fn main() {
                     let serial = emu.read_serial();
 
                     if serial != 0xFF {
-                        serial_buf += &format!("{}", serial as char);
+                        if serial == b'\n' {
+                            println!("{serial_buf}");
+                            serial_buf = String::new();
+                        } else {
+                            serial_buf += &format!("{}", serial as char);
+                        }
                     }
                 }
             }
