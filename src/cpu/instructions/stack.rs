@@ -61,7 +61,7 @@ mod tests {
         cpu.regs.set_de(0x2345);
         cpu.regs.set_hl(0x3456);
         cpu.regs.set_af(0x4560);
-        cpu.memory.splice(0, start);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         // Push them bad boyes onto the stack
         cpu.step();

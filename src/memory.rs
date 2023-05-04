@@ -8,16 +8,16 @@ mod bank;
 mod init;
 pub mod mbc;
 
-pub const LY: u16 = 0xFF44;
-pub const WRAM_BANK_SELECT: u16 = 0xFF70;
-pub const IE: u16 = 0xFFFF;
-pub const IF: u16 = 0xFF0F;
 pub const DIV: u16 = 0xFF04;
 pub const TIMA: u16 = 0xFF05;
 pub const TMA: u16 = 0xFF06;
 pub const TAC: u16 = 0xFF07;
+pub const IF: u16 = 0xFF0F;
 pub const LCDC: u16 = 0xFF40;
 pub const STAT: u16 = 0xFF41;
+pub const LY: u16 = 0xFF44;
+pub const WRAM_BANK_SELECT: u16 = 0xFF70;
+pub const IE: u16 = 0xFFFF;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub(crate) enum MmuAddr {
@@ -124,8 +124,8 @@ impl Mmu {
     /// Attempts to retrieve a byte of data from memory at the address `addr`
     ///
     /// ### Return Variants
-    /// - Returns `Some<u8>` if the selected cell is initialized
-    /// - Returns `None` if the selected cell is uninitialized
+    /// - `Some<u8>` if the selected cell is initialized
+    /// - `None` if the selected cell is uninitialized
     pub fn load(&self, addr: u16) -> Option<u8> {
         match Self::translate(addr) {
             MmuAddr::Mbc(a) => self.mbc.load(a),

@@ -230,7 +230,8 @@ impl Cpu {
     /// - The `half carry` flag is set if bit 11 overflows into bit 12
     /// - The `carry` flag is set if the output wraps around `65535` to `0`
     pub fn add_hl(&mut self, value: u16) -> u16 {
-        let (out, overflowed) = self.regs.get_hl().overflowing_add(value);
+        let hl = self.regs.get_hl();
+        let (out, overflowed) = hl.overflowing_add(value);
         self.tick();
 
         self.regs.set_nf(false);
@@ -288,6 +289,7 @@ mod tests {
         let mut cpu = init();
         cpu.regs.a = 2;
         cpu.regs.b = 8;
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::ADD(ArithmeticTarget::B));
 
@@ -299,6 +301,7 @@ mod tests {
         let mut cpu = init();
         cpu.regs.a = 8;
         cpu.regs.c = 8;
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::ADD(ArithmeticTarget::C));
 
@@ -311,6 +314,7 @@ mod tests {
         let mut cpu = init();
         cpu.regs.a = 0;
         cpu.regs.d = 0;
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::ADD(ArithmeticTarget::D));
 
@@ -323,13 +327,11 @@ mod tests {
         let mut cpu = init();
         cpu.regs.a = 128;
         cpu.regs.e = 129;
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::ADD(ArithmeticTarget::E));
 
         assert_eq!(cpu.regs.a, 1);
-
-        println!("{:08b}", cpu.regs.f.as_byte());
-
         assert_eq!(cpu.regs.f.as_byte(), 0b0001_0000);
     }
 
@@ -339,6 +341,7 @@ mod tests {
         cpu.regs.a = 128;
         cpu.regs.h = 129;
         cpu.regs.l = 10;
+        cpu.regs.f.set_bits(0);
 
         // after this instruction, A is 1 and the carry flag is true
         cpu.execute(Instruction::ADD(ArithmeticTarget::H));
@@ -356,6 +359,7 @@ mod tests {
         let mut cpu = init();
         cpu.regs.a = 10;
         cpu.regs.b = 8;
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::SUB(ArithmeticTarget::B));
 
@@ -368,6 +372,7 @@ mod tests {
         let mut cpu = init();
         cpu.regs.a = 255;
         cpu.regs.b = 15;
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::AND(ArithmeticTarget::B));
 
@@ -380,6 +385,7 @@ mod tests {
         let mut cpu = init();
         cpu.regs.a = 16;
         cpu.regs.b = 15;
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::AND(ArithmeticTarget::B));
 
@@ -392,6 +398,7 @@ mod tests {
         let mut cpu = init();
         cpu.regs.a = 16;
         cpu.regs.b = 4;
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::OR(ArithmeticTarget::B));
 
@@ -404,6 +411,7 @@ mod tests {
         let mut cpu = init();
         cpu.regs.a = 0;
         cpu.regs.b = 0;
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::OR(ArithmeticTarget::B));
 
@@ -416,6 +424,7 @@ mod tests {
         let mut cpu = init();
         cpu.regs.a = 16;
         cpu.regs.b = 31;
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::XOR(ArithmeticTarget::B));
 
@@ -427,6 +436,7 @@ mod tests {
     fn xor_zero() {
         let mut cpu = init();
         cpu.regs.a = 238;
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::XOR(ArithmeticTarget::A));
 
@@ -438,6 +448,7 @@ mod tests {
     fn inc() {
         let mut cpu = init();
         cpu.regs.b = 34;
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::INC(ArithmeticTarget::B));
 
@@ -449,17 +460,19 @@ mod tests {
     fn inc_carry() {
         let mut cpu = init();
         cpu.regs.b = 255;
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::INC(ArithmeticTarget::B));
 
         assert_eq!(cpu.regs.b, 0);
-        assert_eq!(cpu.regs.f.as_byte(), 0b1011_0000);
+        assert_eq!(cpu.regs.f.as_byte(), 0b1010_0000);
     }
 
     #[test]
     fn dec() {
         let mut cpu = init();
         cpu.regs.d = 34;
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::DEC(ArithmeticTarget::D));
 
@@ -471,11 +484,12 @@ mod tests {
     fn dec_carry() {
         let mut cpu = init();
         cpu.regs.d = 0;
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::DEC(ArithmeticTarget::D));
 
         assert_eq!(cpu.regs.d, 255);
-        assert_eq!(cpu.regs.f.as_byte(), 0b0101_0000);
+        assert_eq!(cpu.regs.f.as_byte(), 0b0110_0000);
     }
 
     // ---------- 16 bit ----------
@@ -495,6 +509,7 @@ mod tests {
         let mut cpu = init();
         cpu.regs.set_hl(8);
         cpu.regs.set_bc(8);
+        cpu.regs.f.set_bits(0);
 
         cpu.execute(Instruction::ADDHL(WordArithmeticTarget::BC));
 

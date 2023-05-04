@@ -23,6 +23,7 @@ const NORMAL_MHZ: f64 = 1.048576;
 const FAST_MHZ: f64 = 2.097152;
 const NORMAL_TICK_DURATION: u128 = (1000.0 / NORMAL_MHZ) as u128;
 const FAST_TICK_DURATION: u128 = (1000.0 / FAST_MHZ) as u128;
+const EXT_PREFIX: u8 = 0xCB;
 
 pub struct Cpu {
     pub regs: Registers,
@@ -39,6 +40,7 @@ pub struct Cpu {
     div_last: bool,
     tima_overflow: bool,
     stop: bool,
+    tick: usize,
 }
 
 impl Cpu {
@@ -58,6 +60,7 @@ impl Cpu {
             div_last: false,
             tima_overflow: false,
             stop: false,
+            tick: 0,
         }
     }
 
@@ -66,14 +69,9 @@ impl Cpu {
             if self.last_tick.elapsed().as_nanos() >= self.tick_duration {
                 self.last_tick = Instant::now();
 
-                // Err means
+                // Err means there was an attempt to read from uninitialized memory
                 if let Err(_) = self.step() {}
             }
-
-            // normal speed ticks every ~238ns, and double speed ticks every ~119ns
-            // waiting 40ns should get us close
-            // we sleep even when we step, yes this is intended future bee
-            thread::sleep(Duration::from_nanos(40));
         }
     }
 
@@ -85,6 +83,7 @@ impl Cpu {
     /// Ticks the system by 1 M-cycle, stepping the PPU and DIV
     pub(crate) fn tick(&mut self) {
         // there is a single tick delay between TIMA overflowing and IF.2 being set
+        self.tick += 1;
         if self.tima_overflow {
             let mut if_reg = self
                 .memory
@@ -133,7 +132,6 @@ impl Cpu {
             self.memory.set(memory::TIMA, tima);
 
             if overflowed {
-                println!("TIMA overflow");
                 self.tima_overflow = true;
             }
         }
@@ -144,9 +142,9 @@ impl Cpu {
     /// Executes a CPU instruction and moves the PC to its next position.
     ///
     /// ### Return Variants
-    /// - Returns `Some(true)` if operation should continue
-    /// - Returns `Some(false)` if STOP was called and execution should stop
-    /// - Returns `Err(addr)` if there was an attempt to read from uninitialized memory
+    /// - `Ok(true)` if operation should continue
+    /// - `Ok(false)` if STOP was called and execution should stop
+    /// - `Err(addr)` if there was an attempt to read from uninitialized memory
     pub(crate) fn step(&mut self) -> Result<bool, u16> {
         if self.debug {
             println!("Loading instruction")
@@ -174,7 +172,7 @@ impl Cpu {
         }
 
         let instruction_byte = self.mem_load(self.regs.pc)?;
-        let (instruction_byte, prefixed) = if instruction_byte == 0xCB {
+        let (instruction_byte, prefixed) = if instruction_byte == EXT_PREFIX {
             (self.load_d8()?, true)
         } else {
             (instruction_byte, false)
@@ -190,7 +188,7 @@ impl Cpu {
             );
         };
 
-        if next_pc == self.regs.pc && self.stop {
+        if self.stop {
             return Ok(false);
         }
 
@@ -198,7 +196,7 @@ impl Cpu {
 
         // the effects of ei are delayed by one instruction
         if self.ei_called == 1 {
-            self.ei_called += 1;
+            self.ei_called = 2;
         } else if self.ei_called == 2 {
             self.ei();
             self.ei_called = 0;
@@ -518,8 +516,8 @@ impl Cpu {
     /// Loads a byte from memory and ticks an M-cycle
     ///
     /// ### Return Variants
-    /// - Returns `Ok(value)` if a byte was read successfully
-    /// - Returns `Err(addr)` if the byte at the address was uninitialized, and `Self::allow_uninit` is false
+    /// - `Ok(value)` if a byte was read successfully
+    /// - `Err(addr)` if the byte at the address was uninitialized, and `Self::allow_uninit` is false
     fn mem_load(&mut self, addr: u16) -> Result<u8, u16> {
         if self.debug {
             print!("[LOAD] {addr:#06X}");

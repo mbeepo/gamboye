@@ -183,7 +183,7 @@ mod tests {
         let start = &[0x06, 0x45];
 
         cpu.regs.b = 0;
-        cpu.memory.splice(0, start);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         cpu.step();
         assert_eq!(cpu.regs.b, 0x45);
@@ -194,8 +194,10 @@ mod tests {
         let mut cpu = init();
         let start = &[0x6A];
 
+        cpu.regs.l = 0;
         cpu.regs.d = 0x45;
-        cpu.memory.splice(0, start);
+        cpu.memory.splice(cpu.regs.pc, start);
+
 
         cpu.step();
         assert_eq!(cpu.regs.l, 0x45);
@@ -207,7 +209,7 @@ mod tests {
         let start = &[0x01, 0x10, 0x20];
 
         cpu.regs.set_bc(0);
-        cpu.memory.splice(0, start);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         cpu.step();
         assert_eq!(cpu.regs.b, 0x20);
@@ -220,7 +222,7 @@ mod tests {
         let start = &[0xF8, 0x10];
 
         cpu.regs.sp = 0x3FFF;
-        cpu.memory.splice(0, start);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         cpu.step();
         assert_eq!(cpu.regs.get_hl(), 0x400F);
@@ -232,7 +234,7 @@ mod tests {
         let start = &[0xF8, 0xF0];
 
         cpu.regs.sp = 0x3FFF;
-        cpu.memory.splice(0, start);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         cpu.step();
         assert_eq!(cpu.regs.get_hl(), 0x3FEF);
@@ -244,7 +246,7 @@ mod tests {
         let start = &[0xF9];
 
         cpu.regs.set_hl(0x4567);
-        cpu.memory.splice(0, start);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         cpu.step();
         assert_eq!(cpu.regs.sp, 0x4567);
@@ -256,7 +258,7 @@ mod tests {
         let start = &[0x08, 0x00, 0x01];
 
         cpu.regs.sp = 0x4567;
-        cpu.memory.splice(0, start);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         cpu.step();
         assert_eq!(cpu.memory.load(0x0100), Some(0x67));
@@ -266,12 +268,11 @@ mod tests {
     #[test]
     fn ld_a_bc() {
         let mut cpu = init();
-        let start = &[0x0A];
+        let start = &[0x0A, 0x45];
 
         cpu.regs.a = 0;
-        cpu.regs.set_bc(0x100);
-        cpu.memory.set(0x100, 0x45);
-        cpu.memory.splice(0, start);
+        cpu.regs.set_bc(0x101);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         cpu.step();
         assert_eq!(cpu.regs.a, 0x45);
@@ -280,31 +281,29 @@ mod tests {
     #[test]
     fn ld_a_hlup() {
         let mut cpu = init();
-        let start = &[0x2A];
+        let start = &[0x2A, 0x45];
 
         cpu.regs.a = 0;
-        cpu.regs.set_hl(0x100);
-        cpu.memory.set(0x100, 0x45);
-        cpu.memory.splice(0, start);
+        cpu.regs.set_hl(0x101);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         cpu.step();
         assert_eq!(cpu.regs.a, 0x45);
-        assert_eq!(cpu.regs.get_hl(), 0x101);
+        assert_eq!(cpu.regs.get_hl(), 0x102);
     }
 
     #[test]
     fn ld_a_hldown() {
         let mut cpu = init();
-        let start = &[0x3A];
+        let start = &[0x3A, 0x45];
 
         cpu.regs.a = 0;
-        cpu.regs.set_hl(0x100);
-        cpu.memory.set(0x100, 0x45);
-        cpu.memory.splice(0, start);
+        cpu.regs.set_hl(0x101);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         cpu.step();
         assert_eq!(cpu.regs.a, 0x45);
-        assert_eq!(cpu.regs.get_hl(), 0xFF);
+        assert_eq!(cpu.regs.get_hl(), 0x100);
     }
 
     #[test]
@@ -315,7 +314,7 @@ mod tests {
         cpu.regs.a = 0x45;
         cpu.regs.set_bc(0x100);
         cpu.memory.set(0x100, 0);
-        cpu.memory.splice(0, start);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         cpu.step();
         assert_eq!(cpu.memory.load(0x100), Some(0x45));
@@ -327,13 +326,13 @@ mod tests {
         let start = &[0x22];
 
         cpu.regs.a = 0x45;
-        cpu.regs.set_hl(0x100);
-        cpu.memory.set(0x100, 0);
-        cpu.memory.splice(0, start);
+        cpu.regs.set_hl(0x101);
+        cpu.memory.set(0x101, 0);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         cpu.step();
-        assert_eq!(cpu.memory.load(0x100), Some(0x45));
-        assert_eq!(cpu.regs.get_hl(), 0x101);
+        assert_eq!(cpu.memory.load(0x101), Some(0x45));
+        assert_eq!(cpu.regs.get_hl(), 0x102);
     }
 
     #[test]
@@ -342,13 +341,14 @@ mod tests {
         let start = &[0x32];
 
         cpu.regs.a = 0x45;
-        cpu.regs.set_hl(0x100);
-        cpu.memory.set(0x100, 0);
-        cpu.memory.splice(0, start);
+        cpu.regs.set_hl(0x101);
+        cpu.memory.set(0x101, 0);
+        cpu.memory.splice(cpu.regs.pc, start);
 
+        // load A into 0x0101 and decrement HL
         cpu.step();
-        assert_eq!(cpu.memory.load(0x100), Some(0x45));
-        assert_eq!(cpu.regs.get_hl(), 0xFF);
+        assert_eq!(cpu.memory.load(0x101), Some(0x45));
+        assert_eq!(cpu.regs.get_hl(), 0x100);
     }
 
     #[test]
@@ -358,7 +358,7 @@ mod tests {
 
         cpu.regs.a = 0;
         cpu.memory.set(0xFF80, 0x45);
-        cpu.memory.splice(0, start);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         cpu.step();
         assert_eq!(cpu.regs.a, 0x45);
@@ -372,7 +372,7 @@ mod tests {
         cpu.regs.a = 0;
         cpu.regs.c = 0x80;
         cpu.memory.set(0xFF80, 0x45);
-        cpu.memory.splice(0, start);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         cpu.step();
         assert_eq!(cpu.regs.a, 0x45);
@@ -385,7 +385,7 @@ mod tests {
 
         cpu.regs.a = 0x45;
         cpu.memory.set(0xFF80, 0);
-        cpu.memory.splice(0, start);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         cpu.step();
         assert_eq!(cpu.memory.load(0xFF80), Some(0x45));
@@ -399,7 +399,7 @@ mod tests {
         cpu.regs.a = 0x45;
         cpu.regs.c = 0x80;
         cpu.memory.set(0xFF80, 0);
-        cpu.memory.splice(0, start);
+        cpu.memory.splice(cpu.regs.pc, start);
 
         cpu.step();
         assert_eq!(cpu.memory.load(0xFF80), Some(0x45));

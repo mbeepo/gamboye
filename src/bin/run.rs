@@ -1,9 +1,22 @@
-use gbc::{Gbc, MbcSelector, RamSize, RomSize, MBC_ADDR};
+use std::{path::PathBuf, time::Instant};
+
+use clap::Parser;
+use gbc::{Gbc, MbcSelector, RamSize, RomSize};
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    filename: PathBuf,
+    #[arg(short, long)]
+    debug: bool,
+    #[arg(short, long)]
+    render: bool,
+}
 
 fn main() {
-    println!("HERE");
+    let cli = Cli::parse();
 
-    let filename = std::env::args().nth(1).unwrap();
+    let filename = cli.filename;
     let data = std::fs::read(filename).unwrap();
     let mut serial_buf = String::new();
 
@@ -16,7 +29,12 @@ fn main() {
         _ => panic!("Unsupported MBC"),
     };
 
-    let mut emu = Gbc::new(mbc, true, true);
+    let mut emu = if cli.render {
+        Gbc::new(mbc, cli.debug, true)
+    } else {
+        Gbc::new_headless(mbc, cli.debug, true)
+    };
+
     emu.load_rom(&data);
 
     loop {
@@ -32,7 +50,12 @@ fn main() {
                     let serial = emu.read_serial();
 
                     if serial != 0xFF {
-                        serial_buf += &format!("{}", serial as char);
+                        if serial == b'\n' {
+                            println!("{serial_buf}");
+                            serial_buf = String::new();
+                        } else {
+                            serial_buf += &format!("{}", serial as char);
+                        }
                     }
                 }
             }
