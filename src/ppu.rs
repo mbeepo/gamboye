@@ -4,7 +4,7 @@ use minifb::{Window, WindowOptions};
 
 use crate::Mmu;
 
-// lightening shades of green
+// lightening shades of grey
 const PALETTE: [u32; 4] = [0x00000000, 0x00555555, 0x00AAAAAA, 0x00FFFFFF];
 
 // screen and sprite dimensions
@@ -12,6 +12,12 @@ const WIDTH: u8 = 160;
 const HEIGHT: u8 = 144;
 const TILE_WIDTH: u8 = 8;
 const TILE_HEIGHT: u8 = 8;
+
+// number of bytes in a tile row
+const ROW_SIZE: u8 = 2;
+
+// number of bytes in a tile
+const TILE_BYTES: u8 = ROW_SIZE * TILE_HEIGHT;
 
 // number of tiles that fit horizontally and vertically
 const WIDTH_IN_TILES: u8 = WIDTH / TILE_WIDTH;
@@ -27,7 +33,6 @@ pub struct Ppu {
     stat: u8,
     coords: PpuCoords,
     fb: [u32; WIDTH as usize * HEIGHT as usize],
-    last_frame: Instant,
 }
 
 enum AddressType {
@@ -57,7 +62,6 @@ impl Ppu {
         let stat = 0;
         let coords = PpuCoords { x: 0, y: 0 };
         let fb = [0; WIDTH as usize * HEIGHT as usize];
-        let last_frame = Instant::now();
 
         Self {
             window,
@@ -65,7 +69,6 @@ impl Ppu {
             stat,
             coords,
             fb,
-            last_frame,
         }
     }
 
@@ -75,7 +78,6 @@ impl Ppu {
         let stat = 0;
         let coords = PpuCoords { x: 0, y: 0 };
         let fb = [0; WIDTH as usize * HEIGHT as usize];
-        let last_frame = Instant::now();
 
         Self {
             window,
@@ -83,7 +85,6 @@ impl Ppu {
             stat,
             coords,
             fb,
-            last_frame,
         }
     }
     
@@ -110,23 +111,26 @@ impl Ppu {
             // the byte in the tilemap points to the offset of the tile data
             let tile_data_offset = memory.load(tilemap_addr).unwrap_or(0);
 
-            // calculate the offset of the tile data for the current line
+            // get the y offset within the tile
+            let tile_y_offset = self.coords.y % TILE_HEIGHT;
+
+            // calculate the start address of the tile data for the current line
             let tile_data_addr = address_type.convert_offset(
-                tile_data_offset as u16 * 0xF + (self.coords.y as u16 % TILE_HEIGHT as u16) * 2,
+                (tile_data_offset as u16 * TILE_BYTES as u16) + (tile_y_offset as u16 * ROW_SIZE as u16),
             );
 
             // get the current line of the tile data
             // 2 bytes per sprite row, combined into 8 2-bit values
-            let tiles = memory.load_block(tile_data_addr, tile_data_addr + TILE_WIDTH as u16);
+            let tiles = memory.load_block(tile_data_addr, tile_data_addr + 1);
 
             // horizontal offset within the sprite
-            // we're just rendering one here
+            // we're just rendering one pixel here
             // this will make more sense when we implement the FIFO
             let x_offset = TILE_WIDTH - 1 - self.coords.x % TILE_WIDTH;
 
             // extract relevant bits
-            let low = tiles[0] >> x_offset & 1;
-            let high = tiles[1] >> x_offset & 1;
+            let low = (tiles[0] >> x_offset) & 1;
+            let high = (tiles[1] >> x_offset) & 1;
 
             // high gets shifted up to fill in the upper bit
             let color_value = (high << 1) | low;
@@ -145,10 +149,6 @@ impl Ppu {
                     window
                         .update_with_buffer(&self.fb, WIDTH as usize, HEIGHT as usize)
                         .expect("Couldn't draw to window");
-                    
-                    let us = self.last_frame.elapsed().as_micros();
-                    println!("{us:05}us");
-                    self.last_frame = Instant::now();
                 }
             }
         }
