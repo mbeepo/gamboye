@@ -27,7 +27,7 @@ const EXT_PREFIX: u8 = 0xCB;
 
 pub struct Cpu {
     pub regs: Registers,
-    pub memory: Mmu,
+    pub memory: Box<Mmu>,
     pub ppu: Ppu,
     pub double_speed: bool,
     pub tick_duration: u128,
@@ -47,7 +47,7 @@ impl Cpu {
     pub fn new(memory: Mmu, ppu: Ppu, debug: bool, allow_uninit: bool) -> Self {
         Self {
             regs: Registers::new(),
-            memory,
+            memory: Box::new(memory),
             ppu,
             double_speed: false,
             tick_duration: NORMAL_TICK_DURATION,

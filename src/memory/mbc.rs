@@ -128,10 +128,8 @@ pub fn init_mbc(kind: MbcSelector) -> Box<dyn Mbc> {
                 size => convert_ram_size(&size),
             };
 
-            let value: Option<u8> = None;
-
-            let rom = vec![[value; 0x4000]; rom_banks];
-            let ram = vec![[value; 0x2000]; ram_banks];
+            let rom = vec![Box::new([None; 0x4000]); rom_banks];
+            let ram = vec![Box::new([None; 0x2000]); ram_banks];
 
             Box::new(Mbc1 {
                 rom: rom.into_boxed_slice(),

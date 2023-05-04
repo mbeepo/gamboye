@@ -3,9 +3,9 @@ use super::{Mbc, MbcAddr};
 #[derive(Clone)]
 pub struct Mbc1 {
     /// Cartridge ROM, up to 128 banks, each 16384 bytes
-    pub rom: Box<[[Option<u8>; 0x4000]]>,
+    pub rom: Box<[Box<[Option<u8>; 0x4000]>]>,
     /// Cartridge RAM, up to 4 banks, each 8192 bytes
-    pub ram: Box<[[Option<u8>; 0x2000]]>,
+    pub ram: Box<[Box<[Option<u8>; 0x2000]>]>,
     pub rom_bank: u8,
     pub ram_bank: u8,
     pub ram_enabled: bool,
