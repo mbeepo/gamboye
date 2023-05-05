@@ -25,6 +25,57 @@ const NORMAL_TICK_DURATION: u128 = (1000.0 / NORMAL_MHZ) as u128;
 const FAST_TICK_DURATION: u128 = (1000.0 / FAST_MHZ) as u128;
 const EXT_PREFIX: u8 = 0xCB;
 
+pub enum Breakpoint {
+    OpCode(u8),
+    PrefixCode(u8),
+    Instruction(Instruction),
+    Address(u16),
+    MemoryRead(u16),
+    MemoryWrite(u16),
+    Interrupt(u8),
+}
+
+pub struct EnabledBreakpoints {
+    pub opcode: bool,
+    pub prefixcode: bool,
+    pub instruction: bool,
+    pub address: bool,
+    pub memory_read: bool,
+    pub memory_write: bool,
+    pub interrupt: bool,
+}
+
+impl EnabledBreakpoints {
+    fn is_enabled(&self, value: Breakpoint) -> bool {
+        // TODO: check if the breakpoint is actually enabled
+        true
+    }
+}
+
+pub struct Breakpoints {
+    pub breakpoints: Vec<Breakpoint>,
+    pub enabled_kinds: EnabledBreakpoints,
+    pub master_toggle: bool,
+}
+
+impl Breakpoints {
+    fn check(&self, value: Breakpoint) -> bool {
+        if !self.master_toggle {
+            false
+        } else if !self.enabled_kinds.is_enabled(value) {
+            false
+        } else {
+            
+        }
+    }
+}
+
+pub enum CpuState {
+    Run,
+    Break,
+    Stop,
+}
+
 pub struct Cpu {
     pub regs: Registers,
     pub memory: Box<Mmu>,
@@ -144,7 +195,7 @@ impl Cpu {
     /// - `Ok(true)` if operation should continue
     /// - `Ok(false)` if STOP was called and execution should stop
     /// - `Err(addr)` if there was an attempt to read from uninitialized memory
-    pub(crate) fn step(&mut self) -> Result<bool, u16> {
+    pub(crate) fn step(&mut self) -> Result<CpuState, u16> {
         if self.debug {
             println!("Loading instruction")
         }
@@ -167,7 +218,7 @@ impl Cpu {
             }
 
             self.tick();
-            return Ok(true);
+            return Ok(CpuState::Run);
         }
 
         let instruction_byte = self.mem_load(self.regs.pc)?;
@@ -188,7 +239,7 @@ impl Cpu {
         };
 
         if self.stop {
-            return Ok(false);
+            return Ok(CpuState::Stop);
         }
 
         self.regs.pc = next_pc;
@@ -202,9 +253,10 @@ impl Cpu {
         }
 
         self.handle_interrupts();
-        Ok(true)
+        Ok(CpuState::Run)
     }
 
+    // TODO: clean this up (enum probably)
     fn handle_interrupts(&mut self) {
         if self.regs.ime {
             let ie = self
@@ -239,7 +291,7 @@ impl Cpu {
                     // pc is pushed to the stack
                     self.push_word(self.regs.pc);
 
-                    // the ISR address is loaded into pc, taking another cycle
+                    // the 16 bit ISR address is loaded into pc, taking another cycle
                     self.regs.pc = 0x40 + 0x08 * i as u16;
 
                     self.tick();
@@ -562,6 +614,9 @@ impl Cpu {
             }
             memory::STAT => {
                 self.ppu.set_stat(value);
+            }
+            memory::BGP => {
+                self.ppu.set_palette(value);
             }
             _ => {}
         }

@@ -1,3 +1,5 @@
+use std::mem::discriminant;
+
 mod arithmetic;
 mod bitwise;
 mod control;
@@ -285,6 +287,14 @@ pub enum Instruction {
     /// - The `carry` flag is set if the output wraps around `65535` to `0`
     ADDSP,
 }
+
+impl PartialEq for Instruction {
+    fn eq(&self, other: &Self) -> bool {
+        discriminant(self) == discriminant(other)
+    }
+}
+
+impl Eq for Instruction {}
 
 #[derive(Clone, Copy, Debug)]
 pub enum ArithmeticTarget {

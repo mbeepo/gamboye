@@ -127,6 +127,11 @@ fn main() {
                     // enables debug logging on the cpu
                     emu.cpu.debug = true;
                     println!("Debug logging enabled");
+                } else if input.starts_with("break") {
+                    // Usage: break( <op:u8>)*
+                    // sets breakpoints to the listed opcodes
+                    // opcodes must be space separated 8 bit integers, and can be in hexadecimal
+
                 } else if input == "exit" {
                     return;
                 }
