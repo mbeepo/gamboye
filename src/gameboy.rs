@@ -1,5 +1,5 @@
 use crate::{
-    cpu::Cpu,
+    cpu::{Cpu, CpuState},
     memory::{mbc::MbcSelector, Mmu},
     ppu::Ppu,
 };
@@ -37,7 +37,7 @@ impl Gbc {
     }
 
     /// Move the system forward by one CPU tick
-    pub fn step(&mut self) -> Result<bool, u16> {
+    pub fn step(&mut self) -> Result<CpuState, u16> {
         self.cpu.step()
     }
 

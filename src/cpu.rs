@@ -25,50 +25,50 @@ const NORMAL_TICK_DURATION: u128 = (1000.0 / NORMAL_MHZ) as u128;
 const FAST_TICK_DURATION: u128 = (1000.0 / FAST_MHZ) as u128;
 const EXT_PREFIX: u8 = 0xCB;
 
-pub enum Breakpoint {
-    OpCode(u8),
-    PrefixCode(u8),
-    Instruction(Instruction),
-    Address(u16),
-    MemoryRead(u16),
-    MemoryWrite(u16),
-    Interrupt(u8),
-}
+// pub enum Breakpoint {
+//     OpCode(u8),
+//     PrefixCode(u8),
+//     Instruction(Instruction),
+//     Address(u16),
+//     MemoryRead(u16),
+//     MemoryWrite(u16),
+//     Interrupt(u8),
+// }
 
-pub struct EnabledBreakpoints {
-    pub opcode: bool,
-    pub prefixcode: bool,
-    pub instruction: bool,
-    pub address: bool,
-    pub memory_read: bool,
-    pub memory_write: bool,
-    pub interrupt: bool,
-}
+// pub struct EnabledBreakpoints {
+//     pub opcode: bool,
+//     pub prefixcode: bool,
+//     pub instruction: bool,
+//     pub address: bool,
+//     pub memory_read: bool,
+//     pub memory_write: bool,
+//     pub interrupt: bool,
+// }
 
-impl EnabledBreakpoints {
-    fn is_enabled(&self, value: Breakpoint) -> bool {
-        // TODO: check if the breakpoint is actually enabled
-        true
-    }
-}
+// impl EnabledBreakpoints {
+//     fn is_enabled(&self, value: Breakpoint) -> bool {
+//         // TODO: check if the breakpoint is actually enabled
+//         true
+//     }
+// }
 
-pub struct Breakpoints {
-    pub breakpoints: Vec<Breakpoint>,
-    pub enabled_kinds: EnabledBreakpoints,
-    pub master_toggle: bool,
-}
+// pub struct Breakpoints {
+//     pub breakpoints: Vec<Breakpoint>,
+//     pub enabled_kinds: EnabledBreakpoints,
+//     pub master_toggle: bool,
+// }
 
-impl Breakpoints {
-    fn check(&self, value: Breakpoint) -> bool {
-        if !self.master_toggle {
-            false
-        } else if !self.enabled_kinds.is_enabled(value) {
-            false
-        } else {
+// impl Breakpoints {
+//     fn check(&self, value: Breakpoint) -> bool {
+//         if !self.master_toggle {
+//             false
+//         } else if !self.enabled_kinds.is_enabled(value) {
+//             false
+//         } else {
             
-        }
-    }
-}
+//         }
+//     }
+// }
 
 pub enum CpuState {
     Run,
@@ -320,6 +320,7 @@ impl Cpu {
             | Instruction::OR(target)
             | Instruction::XOR(target) => {
                 let value = match target {
+                    // TODO: move these blocks of register accesses into a Register method
                     ArithmeticTarget::A => self.regs.a,
                     ArithmeticTarget::B => self.regs.b,
                     ArithmeticTarget::C => self.regs.c,
@@ -354,8 +355,19 @@ impl Cpu {
                     ArithmeticTarget::C => self.regs.c,
                     ArithmeticTarget::D => self.regs.d,
                     ArithmeticTarget::E => self.regs.e,
-                    ArithmeticTarget::H => self.regs.h,
-                    ArithmeticTarget::L => self.regs.l,
+                    ArithmeticTarget::H => {
+                        if self.regs.h == self.regs.a {
+                            println!("H: {:#04X}\nA: {:#04X}", self.regs.h, self.regs.a);
+                        }
+
+                        self.regs.h
+                    },
+                    ArithmeticTarget::L => {
+                        if self.regs.l == self.regs.a {
+                            println!("L: {:#04X}\nA: {:#04X}", self.regs.l, self.regs.a);
+                        }
+                        self.regs.l
+                    },
                     ArithmeticTarget::HL => self.load_from_hl()?,
                     ArithmeticTarget::Immediate => {
                         size = 2;

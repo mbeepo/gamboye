@@ -1,7 +1,7 @@
 use std::{path::PathBuf, time::Instant};
 
 use clap::Parser;
-use gbc::{Gbc, MbcSelector, RamSize, RomSize, MBC_ADDR};
+use gbc::{Gbc, MbcSelector, RamSize, RomSize, MBC_ADDR, CpuState};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -40,23 +40,27 @@ fn main() {
     loop {
         match emu.step() {
             Ok(go) => {
-                if !go {
-                    println!("----- STOP instruction reached -----");
-                    println!("Registers: A: {:#04X} B: {:#04X} C: {:#04X} D: {:#04X} E: {:#04X} H: {:#04X} L: {:#04X} PC: {:#06X}",
-                        emu.cpu.regs.a, emu.cpu.regs.b, emu.cpu.regs.c, emu.cpu.regs.d, emu.cpu.regs.e, emu.cpu.regs.h, emu.cpu.regs.l, emu.cpu.regs.pc);
-                    println!("Serial buffer: {serial_buf}");
-                    break;
-                } else {
-                    let serial = emu.read_serial();
-
-                    if serial != 0xFF {
-                        if serial == b'\n' {
-                            println!("{serial_buf}");
-                            serial_buf = String::new();
-                        } else {
-                            serial_buf += &format!("{}", serial as char);
+                match go {
+                    CpuState::Stop => {
+                        println!("----- STOP instruction reached -----");
+                        println!("Registers: A: {:#04X} B: {:#04X} C: {:#04X} D: {:#04X} E: {:#04X} H: {:#04X} L: {:#04X} PC: {:#06X}",
+                            emu.cpu.regs.a, emu.cpu.regs.b, emu.cpu.regs.c, emu.cpu.regs.d, emu.cpu.regs.e, emu.cpu.regs.h, emu.cpu.regs.l, emu.cpu.regs.pc);
+                        println!("Serial buffer: {serial_buf}");
+                        break;
+                    }
+                    CpuState::Run => {
+                        let serial = emu.read_serial();
+    
+                        if serial != 0xFF {
+                            if serial == b'\n' {
+                                println!("{serial_buf}");
+                                serial_buf = String::new();
+                            } else {
+                                serial_buf += &format!("{}", serial as char);
+                            }
                         }
                     }
+                    CpuState::Break => {}
                 }
             }
             Err(addr) => {

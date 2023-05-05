@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use gbc::{Gbc, MbcSelector, RamSize, RomSize};
+use gbc::{Gbc, MbcSelector, RamSize, RomSize, CpuState};
 
 fn main() {
     let filename = std::env::args().nth(1).unwrap();
@@ -29,23 +29,27 @@ fn main() {
     loop {
         match emu.step() {
             Ok(go) => {
-                if !go {
-                    println!("----- STOP instruction reached -----");
-                    println!("Serial buffer: {}", serial_buf);
-                    break;
-                } else {
-                    let pc = emu.cpu.regs.pc;
-                    let pcmem = emu.cpu.memory.load_block(pc, pc + 3);
-                    let out = format!("A: {:02X} F: {:02X} B: {:02X} C: {:02X} D: {:02X} E: {:02X} H: {:02X} L: {:02X} SP: {:04X} PC: 00:{:04X} ({:02X} {:02X} {:02X} {:02X})\n",
-                                    emu.cpu.regs.a, emu.cpu.regs.f.as_byte(), emu.cpu.regs.b, emu.cpu.regs.c, emu.cpu.regs.d, emu.cpu.regs.e, emu.cpu.regs.h, emu.cpu.regs.l,
-                                    emu.cpu.regs.sp, emu.cpu.regs.pc, pcmem[0], pcmem[1], pcmem[2], pcmem[3]);
-                    file.write_all(out.as_bytes()).unwrap();
-
-                    let serial = emu.read_serial();
-
-                    if serial != 0xFF {
-                        serial_buf += &format!("{}", serial as char);
+                match go {
+                    CpuState::Stop => {
+                        println!("----- STOP instruction reached -----");
+                        println!("Serial buffer: {}", serial_buf);
+                        break;
                     }
+                    CpuState::Run => {
+                        let pc = emu.cpu.regs.pc;
+                        let pcmem = emu.cpu.memory.load_block(pc, pc + 3);
+                        let out = format!("A: {:02X} F: {:02X} B: {:02X} C: {:02X} D: {:02X} E: {:02X} H: {:02X} L: {:02X} SP: {:04X} PC: 00:{:04X} ({:02X} {:02X} {:02X} {:02X})\n",
+                                        emu.cpu.regs.a, emu.cpu.regs.f.as_byte(), emu.cpu.regs.b, emu.cpu.regs.c, emu.cpu.regs.d, emu.cpu.regs.e, emu.cpu.regs.h, emu.cpu.regs.l,
+                                        emu.cpu.regs.sp, emu.cpu.regs.pc, pcmem[0], pcmem[1], pcmem[2], pcmem[3]);
+                        file.write_all(out.as_bytes()).unwrap();
+
+                        let serial = emu.read_serial();
+
+                        if serial != 0xFF {
+                            serial_buf += &format!("{}", serial as char);
+                        }
+                    }
+                    CpuState::Break => {}
                 }
             }
             Err(addr) => {
