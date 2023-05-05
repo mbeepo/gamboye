@@ -97,7 +97,7 @@ impl Ppu {
         ) {
             Ok(win) => Some(win),
             Err(err) => {
-                panic!("Unable to create window {}", err);
+                panic!("Unable to create window: {}", err);
             }
         };
         let lcdc = 0;
@@ -169,12 +169,14 @@ impl Ppu {
             // 2 bytes per sprite row, combined into 8 2-bit values
             let tiles = memory.load_block(tile_data_addr, tile_data_addr + 1);
 
-            // horizontal offset within the sprite
+            // horizontal offset of the bit within the sprite
             // we're just rendering one pixel here
-            // this will make more sense when we implement the FIFO
+            // this will be more efficient when we implement the FIFO
             let x_offset = TILE_WIDTH - 1 - self.coords.x % TILE_WIDTH;
 
             // extract relevant bits
+            // we shift the color bytes first so it's less messy to get 0 or 1
+            // first byte in memory has its bits after the second byte, probably cause little endian
             let low = (tiles[0] >> x_offset) & 1;
             let high = (tiles[1] >> x_offset) & 1;
 
@@ -200,7 +202,6 @@ impl Ppu {
         }
     }
     pub fn set_lcdc(&mut self, lcdc: u8) {
-
         self.lcdc = lcdc;
     }
 
