@@ -16,7 +16,7 @@ fn main() {
         _ => panic!("Unsupported MBC"),
     };
 
-    let mut emu = Gbc::new(mbc, true, true);
+    let mut emu = Gbc::new(mbc, false, true);
 
     let mut unlocked = false;
     let mut stepping = true;
