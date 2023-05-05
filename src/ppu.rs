@@ -20,8 +20,9 @@ const ROW_SIZE: u8 = 2;
 const TILE_BYTES: u8 = ROW_SIZE * TILE_HEIGHT;
 
 // number of tiles that fit horizontally and vertically
-const WIDTH_IN_TILES: u8 = WIDTH / TILE_WIDTH;
-const HEIGHT_IN_TILES: u8 = HEIGHT / TILE_HEIGHT;
+// const WIDTH_IN_TILES: u8 = WIDTH / TILE_WIDTH;
+// const HEIGHT_IN_TILES: u8 = HEIGHT / TILE_HEIGHT;
+const WIDTH_IN_TILES: u8 = 32;
 
 // base addresses for the different tile data addressing modes
 const UNSIGNED_BASE: u16 = 0x8000;
