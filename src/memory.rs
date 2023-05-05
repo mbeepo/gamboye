@@ -8,15 +8,24 @@ mod bank;
 mod init;
 pub mod mbc;
 
+/// Internal timer
 pub const DIV: u16 = 0xFF04;
+/// User facing timer
 pub const TIMA: u16 = 0xFF05;
+/// Timer modulo (TIMA resets to this)
 pub const TMA: u16 = 0xFF06;
+/// Timer control
 pub const TAC: u16 = 0xFF07;
+/// Interrupt flag
 pub const IF: u16 = 0xFF0F;
+/// LCD control
 pub const LCDC: u16 = 0xFF40;
+/// LCD status
 pub const STAT: u16 = 0xFF41;
+/// Current scanline
 pub const LY: u16 = 0xFF44;
 pub const WRAM_BANK_SELECT: u16 = 0xFF70;
+/// Granular interrupt enable
 pub const IE: u16 = 0xFFFF;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
