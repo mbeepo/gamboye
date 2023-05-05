@@ -4,8 +4,8 @@ use minifb::{Window, WindowOptions};
 
 use crate::Mmu;
 
-// lightening shades of grey
-const PALETTE: [u32; 4] = [0x00000000, 0x00555555, 0x00AAAAAA, 0x00FFFFFF];
+// darkening shades of grey
+const PALETTE: [u32; 4] = [0x00FFFFFF, 0x00AAAAAA, 0x00555555, 0x00000000];
 
 // screen and sprite dimensions
 const WIDTH: u8 = 160;
