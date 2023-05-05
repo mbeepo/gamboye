@@ -144,7 +144,7 @@ fn main() {
                 if !go {
                     println!("----- STOP instruction reached -----");
                     println!("Serial buffer: {}", serial_buf);
-                    break;
+                    return;
                 }
             }
             Err(addr) => {
