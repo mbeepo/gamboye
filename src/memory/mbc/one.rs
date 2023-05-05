@@ -99,7 +99,7 @@ impl Mbc for Mbc1 {
         while i < len {
             // panic if the bank number is larger than the amount of banks in this mbc
             if bank >= self.rom.len() {
-                panic!("ROM is of insufficient size using specified values");
+                panic!("ROM is of insufficient size as configured");
             }
 
             // the number of bytes to move into the current bank
