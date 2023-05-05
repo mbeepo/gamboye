@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{time::Instant, ops::Index};
 
 use minifb::{Window, WindowOptions};
 
@@ -33,6 +33,7 @@ pub struct Ppu {
     lcdc: u8,
     stat: u8,
     coords: PpuCoords,
+    palette: Palette,
     fb: [u32; WIDTH as usize * HEIGHT as usize],
 }
 
@@ -44,6 +45,46 @@ enum AddressType {
 struct PpuCoords {
     x: u8,
     y: u8,
+}
+
+struct Palette {
+    colors: [u32; 4],
+}
+
+impl Palette {
+    fn new() -> Self {
+        let colors = Self::from_bgp(0b00011011);
+
+        Self { colors }
+    }
+
+    fn update(&mut self, bgp: u8) {
+        self.colors = Self::from_bgp(bgp);
+
+        dbg!(self.colors);
+    }
+
+    fn from_bgp(bgp: u8) -> [u32; 4] {
+        let color0 = bgp & 0b11;
+        let color1 = (bgp >> 2) & 0b11;
+        let color2 = (bgp >> 4) & 0b11;
+        let color3 = (bgp >> 6) & 0b11;
+
+        [
+            PALETTE[color0 as usize],
+            PALETTE[color1 as usize],
+            PALETTE[color2 as usize],
+            PALETTE[color3 as usize],
+        ]
+    }
+}
+
+impl Index<u8> for Palette {
+    type Output = u32;
+
+    fn index(&self, index: u8) -> &Self::Output {
+        &self.colors[index as usize]
+    }
 }
 
 impl Ppu {
@@ -62,6 +103,7 @@ impl Ppu {
         let lcdc = 0;
         let stat = 0;
         let coords = PpuCoords { x: 0, y: 0 };
+        let palette = Palette::new();
         let fb = [0; WIDTH as usize * HEIGHT as usize];
 
         Self {
@@ -69,6 +111,7 @@ impl Ppu {
             lcdc,
             stat,
             coords,
+            palette,
             fb,
         }
     }
@@ -78,6 +121,7 @@ impl Ppu {
         let lcdc = 0;
         let stat = 0;
         let coords = PpuCoords { x: 0, y: 0 };
+        let palette = Palette::new();
         let fb = [0; WIDTH as usize * HEIGHT as usize];
 
         Self {
@@ -85,6 +129,7 @@ impl Ppu {
             lcdc,
             stat,
             coords,
+            palette,
             fb,
         }
     }
@@ -135,7 +180,7 @@ impl Ppu {
 
             // high gets shifted up to fill in the upper bit
             let color_value = (high << 1) | low;
-            let color = PALETTE[color_value as usize];
+            let color = self.palette[color_value];
 
             self.fb[self.coords.x as usize + self.coords.y as usize * WIDTH as usize] = color;
 
@@ -163,18 +208,8 @@ impl Ppu {
         self.stat = stat;
     }
 
-    // combines a bit from each byte to make a palette color
-    fn interleave(bytes: [u8; 2]) -> [u8; 8] {
-        let mut out = [0; 8];
-
-        for i in 0..8 {
-            let high = (bytes[0] & (0x80 >> i)) << 1;
-            let low = bytes[1] & (0x80 >> i);
-
-            out[i] = (high | low) >> (7 - i);
-        }
-
-        out
+    pub fn set_palette(&mut self, bgp: u8) {
+        self.palette.update(bgp);
     }
 }
 
