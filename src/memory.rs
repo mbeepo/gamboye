@@ -24,6 +24,8 @@ pub const LCDC: u16 = 0xFF40;
 pub const STAT: u16 = 0xFF41;
 /// Current scanline
 pub const LY: u16 = 0xFF44;
+/// DMG palette
+pub const BGP: u16 = 0xFF47;
 pub const WRAM_BANK_SELECT: u16 = 0xFF70;
 /// Granular interrupt enable
 pub const IE: u16 = 0xFFFF;
