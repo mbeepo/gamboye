@@ -26,7 +26,8 @@ pub const STAT: u16 = 0xFF41;
 pub const LY: u16 = 0xFF44;
 /// DMG palette
 pub const BGP: u16 = 0xFF47;
-pub const WRAM_BANK_SELECT: u16 = 0xFF70;
+/// WRAM bank select
+pub const SVBK: u16 = 0xFF70;
 /// Granular interrupt enable
 pub const IE: u16 = 0xFFFF;
 
@@ -178,8 +179,8 @@ impl Mmu {
             MmuAddr::Oam(a) => self.oam[a as usize] = Some(value),
             MmuAddr::Prohibited => {}
             MmuAddr::Io(a) => {
-                // WRAM Bank Select
-                if addr == WRAM_BANK_SELECT {
+                if addr == SVBK {
+                    // WRAM Bank Select
                     self.wram.select(value);
                 }
 
