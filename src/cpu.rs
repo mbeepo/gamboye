@@ -95,7 +95,7 @@ impl Cpu {
             self.tima_overflow = false;
         }
 
-        self.ppu.render(&self.memory);
+        self.ppu.tick(&self.memory);
         self.tick_div();
     }
 

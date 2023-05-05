@@ -88,7 +88,7 @@ impl Ppu {
         }
     }
     
-    pub fn render(&mut self, memory: &Mmu) {
+    pub fn tick(&mut self, memory: &Mmu) {
         // if rendering is enabled
         if let Some(ref mut window) = &mut self.window {
             let address_type = if self.lcdc & 1 << 4 > 0 {
