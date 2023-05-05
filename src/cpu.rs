@@ -76,7 +76,6 @@ impl Cpu {
     }
 
     pub(crate) fn load_rom(&mut self, data: &[u8]) {
-        println!("[CPU] Loading rom");
         self.memory.load_rom(data);
     }
 

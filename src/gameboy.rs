@@ -28,7 +28,6 @@ impl Gbc {
     }
 
     pub fn load_rom(&mut self, data: &[u8]) {
-        println!("[EMU] Loading rom");
         self.cpu.load_rom(data);
     }
 
