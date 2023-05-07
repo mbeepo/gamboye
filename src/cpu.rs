@@ -25,50 +25,107 @@ const NORMAL_TICK_DURATION: u128 = (1000.0 / NORMAL_MHZ) as u128;
 const FAST_TICK_DURATION: u128 = (1000.0 / FAST_MHZ) as u128;
 const EXT_PREFIX: u8 = 0xCB;
 
-// pub enum Breakpoint {
-//     OpCode(u8),
-//     PrefixCode(u8),
-//     Instruction(Instruction),
-//     Address(u16),
-//     MemoryRead(u16),
-//     MemoryWrite(u16),
-//     Interrupt(u8),
-// }
+#[derive(Clone, Copy)]
+pub enum Breakpoint {
+    OpCode(u8),
+    PrefixCode(u8),
+    Instruction(Instruction),
+    Pc(u16),
+    MemoryRead(u16),
+    MemoryWrite(u16),
+    Interrupt(u8),
+}
 
-// pub struct EnabledBreakpoints {
-//     pub opcode: bool,
-//     pub prefixcode: bool,
-//     pub instruction: bool,
-//     pub address: bool,
-//     pub memory_read: bool,
-//     pub memory_write: bool,
-//     pub interrupt: bool,
-// }
+impl PartialEq for Breakpoint {
+    fn eq(&self, other: &Self) -> bool {
+        use Breakpoint::*;
+        match (self, other) {
+            (OpCode(lhs), OpCode(rhs))
+            | (PrefixCode(lhs), PrefixCode(rhs)) => {
+                lhs == rhs
+            }
+            (Instruction(lhs), Instruction(rhs)) => {
+                lhs == rhs
+            }
+            (Pc(lhs), Pc(rhs))
+            | (MemoryRead(lhs), MemoryRead(rhs))
+            | (MemoryWrite(lhs), MemoryWrite(rhs)) => {
+                lhs == rhs
+            }
+            (Interrupt(lhs), Interrupt(rhs)) => {
+                lhs == rhs
+            }
+            (_, _) => false
+        }
+    }
+}
 
-// impl EnabledBreakpoints {
-//     fn is_enabled(&self, value: Breakpoint) -> bool {
-//         // TODO: check if the breakpoint is actually enabled
-//         true
-//     }
-// }
+pub struct EnabledBreakpoints {
+    pub opcode: bool,
+    pub prefix_code: bool,
+    pub instruction: bool,
+    pub pc: bool,
+    pub memory_read: bool,
+    pub memory_write: bool,
+    pub interrupt: bool,
+}
 
-// pub struct Breakpoints {
-//     pub breakpoints: Vec<Breakpoint>,
-//     pub enabled_kinds: EnabledBreakpoints,
-//     pub master_toggle: bool,
-// }
+impl EnabledBreakpoints {
+    fn new() -> Self {
+        Self {
+            opcode: true,
+            prefix_code: true,
+            instruction: true,
+            pc: true,
+            memory_read: true,
+            memory_write: true,
+            interrupt: true,
+        }
+    }
+    
+    fn is_enabled(&self, value: Breakpoint) -> bool {
+        use Breakpoint::*;
+        match value {
+            OpCode(_) => self.opcode,
+            PrefixCode(_) => self.prefix_code,
+            Instruction(_) => self.instruction,
+            Pc(_) => self.pc,
+            MemoryRead(_) => self.memory_read,
+            MemoryWrite(_) => self.memory_write,
+            Interrupt(_) => self.interrupt,
+        }
+    }
+}
 
-// impl Breakpoints {
-//     fn check(&self, value: Breakpoint) -> bool {
-//         if !self.master_toggle {
-//             false
-//         } else if !self.enabled_kinds.is_enabled(value) {
-//             false
-//         } else {
-            
-//         }
-//     }
-// }
+pub struct Breakpoints {
+    pub breakpoints: Vec<Breakpoint>,
+    pub enabled_kinds: EnabledBreakpoints,
+    pub master_enable: bool,
+}
+
+impl Breakpoints {
+    fn new() -> Self {
+        Self {
+            breakpoints: Vec::new(),
+            enabled_kinds: EnabledBreakpoints::new(),
+            master_enable: true,
+        }
+    }
+    
+    /// This is used to check if an internal event matches any active breakpoints
+    /// If it does match, the breakpoint is passed back out to be forwarded to the frontend
+    fn check(&self, value: Breakpoint) -> Option<Breakpoint> {
+        if !self.master_enable || !self.enabled_kinds.is_enabled(value) {
+            None
+        } else {
+            if self.breakpoints.iter().any(|bp| &value == bp) {
+                Some(value)
+            } else {
+                None
+            }
+        }
+    }
+}
 
 pub enum CpuState {
     Run,
@@ -86,12 +143,16 @@ pub struct Cpu {
     pub halted: bool,
     pub debug: bool,
     pub allow_uninit: bool,
+    pub breakpoint_controls: Breakpoints,
     ei_called: u8,
     div: u16,
     div_last: bool,
     tima_overflow: bool,
     stop: bool,
     tick: usize,
+    /// Breakpoints are put here during execution
+    /// When the instruction is finished, the system goes through this list and checks if any breakpoints were hit
+    pending_breakpoints: Vec<Breakpoint>,
 }
 
 impl Cpu {
@@ -106,12 +167,14 @@ impl Cpu {
             halted: false,
             debug,
             allow_uninit,
+            breakpoint_controls: Breakpoints::new(),
             ei_called: 0,
             div: 0,
             div_last: false,
             tima_overflow: false,
             stop: false,
             tick: 0,
+            pending_breakpoints: Vec::new(),
         }
     }
 
