@@ -28,13 +28,21 @@ const WIDTH_IN_TILES: u8 = 32;
 const UNSIGNED_BASE: u16 = 0x8000;
 const SIGNED_BASE: u16 = 0x9000;
 
+// VRAM parameters for debug window
+const VRAM_LENGTH: u16 = 0x800 * 3;
+const VRAM_WINDOW_WIDTH: usize = TILE_WIDTH as usize * 0x10 * 4;
+const VRAM_WINDOW_HEIGHT: usize = TILE_HEIGHT as usize * 0x10 * 4;
+
+
 pub struct Ppu {
     window: Option<Window>,
+    debug_window: Option<Window>,
     lcdc: u8,
     stat: u8,
     coords: PpuCoords,
     palette: Palette,
     fb: [u32; WIDTH as usize * HEIGHT as usize],
+    debug_fb: Option<[u32; TILE_HEIGHT as usize * (VRAM_LENGTH as usize / ROW_SIZE as usize)]>
 }
 
 enum AddressType {
@@ -100,37 +108,45 @@ impl Ppu {
                 panic!("Unable to create window: {}", err);
             }
         };
+        let debug_window = None;
         let lcdc = 0;
         let stat = 0;
         let coords = PpuCoords { x: 0, y: 0 };
         let palette = Palette::new();
         let fb = [0; WIDTH as usize * HEIGHT as usize];
+        let debug_fb = None;
 
         Self {
             window,
+            debug_window,
             lcdc,
             stat,
             coords,
             palette,
             fb,
+            debug_fb,
         }
     }
 
     pub fn new_headless() -> Self {
         let window = None;
+        let debug_window = None;
         let lcdc = 0;
         let stat = 0;
         let coords = PpuCoords { x: 0, y: 0 };
         let palette = Palette::new();
         let fb = [0; WIDTH as usize * HEIGHT as usize];
+        let debug_fb = None;
 
         Self {
             window,
+            debug_window,
             lcdc,
             stat,
             coords,
             palette,
             fb,
+            debug_fb,
         }
     }
     
@@ -201,6 +217,36 @@ impl Ppu {
             }
         }
     }
+
+    /// Initializes the VRAM debug window
+    /// Note: this does not render anything in the window, you need to call Self::debug_show() for that
+    pub fn init_debug(&mut self) {
+        let debug_window = match Window::new(
+            "Beef Wellington Debug",
+            WIDTH as usize * 2,
+            HEIGHT as usize * 2,
+            WindowOptions::default(),
+        ) {
+            Ok(win) => Some(win),
+            Err(err) => {
+                panic!("Unable to create window: {}", err);
+            }
+        };
+
+        self.debug_window = debug_window;
+        self.debug_fb = Some([0; TILE_HEIGHT as usize * (VRAM_LENGTH as usize /  ROW_SIZE as usize)]);
+    }
+
+    /// Refreshes the VRAM debug window, rendering the current VRAM tile data
+    pub fn debug_show(&mut self, memory: &Mmu) {
+        if let (Some(ref mut window), Some(ref mut fb)) = (&mut self.debug_window, &mut self.debug_fb) {
+            // go through VRAM and put each pixel into fb
+            for row in 0..16 * 24 {
+                let sprite_row = 
+            }
+        }
+    }
+
     pub fn set_lcdc(&mut self, lcdc: u8) {
         self.lcdc = lcdc;
     }
