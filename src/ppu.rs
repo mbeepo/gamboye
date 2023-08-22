@@ -2,7 +2,7 @@ use std::{time::Instant, ops::Index};
 
 use minifb::{Window, WindowOptions};
 
-use crate::Mmu;
+use crate::{Mmu, memory::{SCX, SCY}};
 
 // darkening shades of grey
 const PALETTE: [u32; 4] = [0x00FFFFFF, 0x00AAAAAA, 0x00555555, 0x00000000];
@@ -12,6 +12,8 @@ const WIDTH: u8 = 160;
 const HEIGHT: u8 = 144;
 const TILE_WIDTH: u8 = 8;
 const TILE_HEIGHT: u8 = 8;
+
+const SCALE: usize = 2;
 
 // number of bytes in a tile row
 const ROW_SIZE: u8 = 2;
@@ -30,9 +32,10 @@ const SIGNED_BASE: u16 = 0x9000;
 
 // VRAM parameters for debug window
 const VRAM_LENGTH: u16 = 0x800 * 3;
-const VRAM_WINDOW_WIDTH: usize = TILE_WIDTH as usize * 0x10 * 4;
-const VRAM_WINDOW_HEIGHT: usize = TILE_HEIGHT as usize * 0x10 * 4;
-
+const VRAM_WIDTH_IN_TILES: usize = 24;
+const VRAM_HEIGHT_IN_TILES: usize = (VRAM_LENGTH as usize / TILE_BYTES as usize) / VRAM_WIDTH_IN_TILES;
+const VRAM_DISPLAY_WIDTH: usize = TILE_WIDTH as usize * VRAM_WIDTH_IN_TILES;
+const VRAM_DISPLAY_HEIGHT: usize = TILE_HEIGHT as usize * VRAM_HEIGHT_IN_TILES;
 
 pub struct Ppu {
     window: Option<Window>,
@@ -42,7 +45,7 @@ pub struct Ppu {
     coords: PpuCoords,
     palette: Palette,
     fb: [u32; WIDTH as usize * HEIGHT as usize],
-    debug_fb: Option<[u32; TILE_HEIGHT as usize * (VRAM_LENGTH as usize / ROW_SIZE as usize)]>
+    debug_fb: Option<[u32; VRAM_DISPLAY_WIDTH * VRAM_DISPLAY_HEIGHT]>
 }
 
 enum AddressType {
@@ -68,8 +71,6 @@ impl Palette {
 
     fn update(&mut self, bgp: u8) {
         self.colors = Self::from_bgp(bgp);
-
-        dbg!(self.colors);
     }
 
     fn from_bgp(bgp: u8) -> [u32; 4] {
@@ -99,8 +100,8 @@ impl Ppu {
     pub fn new() -> Self {
         let window = match Window::new(
             "Beef Wellington",
-            WIDTH as usize * 2,
-            HEIGHT as usize * 2,
+            WIDTH as usize * SCALE,
+            HEIGHT as usize * SCALE,
             WindowOptions::default(),
         ) {
             Ok(win) => Some(win),
@@ -150,23 +151,27 @@ impl Ppu {
         }
     }
     
+    /// TODO:
+    /// - BG Enable (Don't show BG if LCDC.0 is cleared)
+    /// - Window
+    /// - Sprites
     pub fn tick(&mut self, memory: &Mmu) {
         // if rendering is enabled
         if let Some(ref mut window) = &mut self.window {
-            let address_type = if self.lcdc & 1 << 4 > 0 {
+            let address_type = if self.lcdc & (1 << 4) > 0 {
                 AddressType::Unsigned
             } else {
                 AddressType::Signed
             };
 
-            let bg_map_area: u16 = if self.lcdc & 1 << 3 > 0 {
+            let bg_map_area: u16 = if self.lcdc & (1 << 3) > 0 {
                 0x9C00
             } else {
                 0x9800
             };
 
-            let tile_x = self.coords.x / TILE_WIDTH;
-            let tile_y = self.coords.y / TILE_HEIGHT;
+            let tile_x = (self.coords.x / TILE_WIDTH + memory.load(SCX).unwrap_or(0) / TILE_WIDTH) % WIDTH_IN_TILES;
+            let tile_y = (self.coords.y + memory.load(SCY).unwrap_or(0)) / TILE_HEIGHT;
             let tilemap_offset = tile_x as usize + tile_y as usize * WIDTH_IN_TILES as usize;
             let tilemap_addr = bg_map_area + tilemap_offset as u16;
 
@@ -174,7 +179,7 @@ impl Ppu {
             let tile_data_offset = memory.load(tilemap_addr).unwrap_or(0);
 
             // get the y offset within the tile
-            let tile_y_offset = self.coords.y % TILE_HEIGHT;
+            let tile_y_offset = (self.coords.y + memory.load(SCY).unwrap_or(0)) % TILE_HEIGHT;
 
             // calculate the start address of the tile data for the current line
             let tile_data_addr = address_type.convert_offset(
@@ -223,8 +228,8 @@ impl Ppu {
     pub fn init_debug(&mut self) {
         let debug_window = match Window::new(
             "Beef Wellington Debug",
-            WIDTH as usize * 2,
-            HEIGHT as usize * 2,
+            VRAM_DISPLAY_WIDTH * SCALE,
+            VRAM_DISPLAY_HEIGHT * SCALE,
             WindowOptions::default(),
         ) {
             Ok(win) => Some(win),
@@ -234,16 +239,50 @@ impl Ppu {
         };
 
         self.debug_window = debug_window;
-        self.debug_fb = Some([0; TILE_HEIGHT as usize * (VRAM_LENGTH as usize /  ROW_SIZE as usize)]);
+        self.debug_fb = Some([0; VRAM_DISPLAY_WIDTH * VRAM_DISPLAY_HEIGHT]);
     }
 
     /// Refreshes the VRAM debug window, rendering the current VRAM tile data
     pub fn debug_show(&mut self, memory: &Mmu) {
         if let (Some(ref mut window), Some(ref mut fb)) = (&mut self.debug_window, &mut self.debug_fb) {
             // go through VRAM and put each pixel into fb
-            for row in 0..16 * 24 {
-                let sprite_row = 
+            const BYTES_PER_TILE_ROW: u8 = ROW_SIZE;
+            const TILES_PER_ROW: usize = VRAM_WIDTH_IN_TILES;
+            const ROWS: usize = VRAM_HEIGHT_IN_TILES;
+            const START_ADDR: u16 = UNSIGNED_BASE;
+
+            let mut current_addr: u16 = START_ADDR;
+
+            for row in 0..ROWS {
+                for tile in 0..TILES_PER_ROW {
+                    for tile_row in 0..TILE_HEIGHT {
+                        let tiles = memory.load_block(current_addr, current_addr + 1);
+
+                        for col in 0..TILE_WIDTH {
+                            let x_offset = TILE_WIDTH - 1 - col;
+
+                            // extract relevant bits
+                            // we shift the color bytes first so it's less messy to get 0 or 1
+                            // first byte in memory has its bits after the second byte, probably cause little endian
+                            let low = (tiles[0] >> x_offset) & 1;
+                            let high = (tiles[1] >> x_offset) & 1;
+    
+                            // high gets shifted up to fill in the upper bit
+                            let color_value = (high << 1) | low;
+                            let color = self.palette[color_value];
+
+                            let x = tile * TILE_WIDTH as usize + x_offset as usize;
+                            let y = row * TILE_HEIGHT as usize + tile_row as usize;
+
+                            fb[x as usize + y as usize * VRAM_DISPLAY_WIDTH as usize] = color;
+                        }
+
+                        current_addr += BYTES_PER_TILE_ROW as u16;
+                    }
+                }
             }
+
+            window.update_with_buffer(fb, VRAM_DISPLAY_WIDTH, VRAM_DISPLAY_HEIGHT).expect("Couldn't draw to VRAM window");
         }
     }
 

@@ -20,6 +20,7 @@ fn main() {
 
     let mut unlocked = false;
     let mut stepping = true;
+    let mut vram_window = false;
     let mut skip: u64 = 0;
     let mut serial_buf = String::new();
 
@@ -132,6 +133,13 @@ fn main() {
                     // sets breakpoints to the listed opcodes
                     // opcodes must be space separated 8 bit integers, and can be in hexadecimal
 
+                } else if input == "show vram" {
+                    if !vram_window {
+                        emu.cpu.ppu.init_debug();
+                        vram_window = true;
+                    }
+
+                    emu.cpu.ppu.debug_show(&emu.cpu.memory)
                 } else if input == "exit" {
                     return;
                 }

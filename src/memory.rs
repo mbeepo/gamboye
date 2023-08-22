@@ -22,6 +22,10 @@ pub const IF: u16 = 0xFF0F;
 pub const LCDC: u16 = 0xFF40;
 /// LCD status
 pub const STAT: u16 = 0xFF41;
+/// Vertical scroll
+pub const SCY: u16 = 0xFF42;
+/// Horizontal scroll
+pub const SCX: u16 = 0xFF43;
 /// Current scanline
 pub const LY: u16 = 0xFF44;
 /// DMG palette
