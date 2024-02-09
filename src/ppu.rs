@@ -2,7 +2,7 @@ use std::{time::Instant, ops::Index};
 
 use minifb::{Window, WindowOptions};
 
-use crate::{Mmu, memory::{SCX, SCY}};
+use crate::{memory::{OAM, OAM_END, SCX, SCY}, Mmu};
 
 // darkening shades of grey
 const PALETTE: [u32; 4] = [0x00FFFFFF, 0x00AAAAAA, 0x00555555, 0x00000000];
@@ -37,6 +37,7 @@ const VRAM_HEIGHT_IN_TILES: usize = (VRAM_LENGTH as usize / TILE_BYTES as usize)
 const VRAM_DISPLAY_WIDTH: usize = TILE_WIDTH as usize * VRAM_WIDTH_IN_TILES;
 const VRAM_DISPLAY_HEIGHT: usize = TILE_HEIGHT as usize * VRAM_HEIGHT_IN_TILES;
 
+#[derive(Debug)]
 pub struct Ppu {
     window: Option<Window>,
     debug_window: Option<Window>,
@@ -45,7 +46,16 @@ pub struct Ppu {
     coords: PpuCoords,
     palette: Palette,
     fb: [u32; WIDTH as usize * HEIGHT as usize],
-    debug_fb: Option<[u32; VRAM_DISPLAY_WIDTH * VRAM_DISPLAY_HEIGHT]>
+    debug_fb: Option<[u32; VRAM_DISPLAY_WIDTH * VRAM_DISPLAY_HEIGHT]>,
+    objects: [Option<Object>; 10],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Object {
+    y: u8,
+    x: u8,
+    index: u8,
+    attributes: u8,
 }
 
 enum AddressType {
@@ -53,11 +63,13 @@ enum AddressType {
     Signed,
 }
 
+#[derive(Clone, Copy, Debug)]
 struct PpuCoords {
     x: u8,
     y: u8,
 }
 
+#[derive(Clone, Copy, Debug)]
 struct Palette {
     colors: [u32; 4],
 }
@@ -116,6 +128,7 @@ impl Ppu {
         let palette = Palette::new();
         let fb = [0; WIDTH as usize * HEIGHT as usize];
         let debug_fb = None;
+        let objects = [None; 10];
 
         Self {
             window,
@@ -126,6 +139,7 @@ impl Ppu {
             palette,
             fb,
             debug_fb,
+            objects,
         }
     }
 
@@ -138,6 +152,7 @@ impl Ppu {
         let palette = Palette::new();
         let fb = [0; WIDTH as usize * HEIGHT as usize];
         let debug_fb = None;
+        let objects = [None; 10];
 
         Self {
             window,
@@ -148,6 +163,7 @@ impl Ppu {
             palette,
             fb,
             debug_fb,
+            objects,
         }
     }
     
@@ -182,9 +198,19 @@ impl Ppu {
             let tile_y_offset = (self.coords.y + memory.load(SCY).unwrap_or(0)) % TILE_HEIGHT;
 
             // calculate the start address of the tile data for the current line
-            let tile_data_addr = address_type.convert_offset(
-                (tile_data_offset as u16 * TILE_BYTES as u16) + (tile_y_offset as u16 * ROW_SIZE as u16),
-            );
+            // TODO: Fix this mess
+            let tile_data_addr = if let Some(Some(object)) = self.objects.iter().find(
+                |object|
+                    object.is_some() && (self.coords.x + 8).overflowing_sub(object.unwrap().x).0 < 8)
+            {
+                let out = (UNSIGNED_BASE + object.index as u16 * TILE_BYTES as u16) + (tile_y_offset as u16 * ROW_SIZE as u16);
+                println!("Sprite addr ({}, {}): {out:#06X}", self.coords.x, self.coords.y);
+                out
+            } else {
+                address_type.convert_offset(
+                    (tile_data_offset as u16 * TILE_BYTES as u16) + (tile_y_offset as u16 * ROW_SIZE as u16),
+                )
+            };
 
             // get the current line of the tile data
             // 2 bytes per sprite row, combined into 8 2-bit values
@@ -219,6 +245,40 @@ impl Ppu {
                         .update_with_buffer(&self.fb, WIDTH as usize, HEIGHT as usize)
                         .expect("Couldn't draw to window");
                 }
+
+                // find objects on this line
+                // TODO: Update for 8x16
+                self.objects = Default::default();
+                let objects = memory.load_block(OAM, OAM_END);
+                let mut object_index = 0;
+
+                for index in 0..objects.len() / 4 {
+                    let object_bytes = &objects[index*4..index*4+4];
+                    let object: Object = object_bytes.into();
+
+                    if (self.coords.y + 16).overflowing_sub(object.y).0 < 8 {
+                        self.objects[object_index] = Some(object);
+                        object_index += 1;
+
+                        if object_index == 10 { break; }
+                    }
+                }
+
+                // Too big scary iterator ow oof
+                // 
+                // let mut objects = memory.load_block(OAM, OAM_END).chunks(4)
+                //     .into_iter()
+                //     .map(|chunk| chunk.into())
+                //     .filter(|object: &Object| self.coords.y - object.y < 8)
+                //     .take(10)
+                //     .map(|object| Some(object))
+                //     .collect::<Vec<Option<Object>>>();
+                // 
+                // objects.resize(10, None);
+                // 
+                // self.objects = objects.as_slice()
+                //     .try_into()
+                //     .unwrap();
             }
         }
     }
@@ -261,6 +321,11 @@ impl Ppu {
                         for col in 0..TILE_WIDTH {
                             let x_offset = TILE_WIDTH - 1 - col;
 
+                            if row == 0 && tile == 0 && tile_row == 0 {
+                                println!("col: {col}");
+                                println!("x_offset: {x_offset}");
+                            }
+
                             // extract relevant bits
                             // we shift the color bytes first so it's less messy to get 0 or 1
                             // first byte in memory has its bits after the second byte, probably cause little endian
@@ -271,7 +336,7 @@ impl Ppu {
                             let color_value = (high << 1) | low;
                             let color = self.palette[color_value];
 
-                            let x = tile * TILE_WIDTH as usize + x_offset as usize;
+                            let x = tile * TILE_WIDTH as usize + col as usize;
                             let y = row * TILE_HEIGHT as usize + tile_row as usize;
 
                             fb[x as usize + y as usize * VRAM_DISPLAY_WIDTH as usize] = color;
@@ -304,6 +369,21 @@ impl AddressType {
         match self {
             AddressType::Unsigned => UNSIGNED_BASE + offset,
             AddressType::Signed => SIGNED_BASE.wrapping_add(offset as i16 as u16),
+        }
+    }
+}
+
+impl From<&[u8]> for Object {
+    fn from(value: &[u8]) -> Self {
+        if value.len() == 4 {
+            Self {
+                y: value[0],
+                x: value[1],
+                index: value[2],
+                attributes: value[3],
+            }
+        } else {
+            Self { y: 0, x: 0, index: 0, attributes: 0 }
         }
     }
 }

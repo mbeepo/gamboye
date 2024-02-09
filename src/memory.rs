@@ -1,3 +1,6 @@
+//! TODO:
+//!     Abstract over checking IO registers
+
 use self::{
     bank::{VramBank, WramBank},
     init::init_io,
@@ -8,6 +11,9 @@ mod bank;
 mod init;
 pub mod mbc;
 
+/// Object memory
+pub const OAM: u16 = 0xFE00;
+pub const OAM_END: u16 = 0xFE9F;
 /// Internal timer
 pub const DIV: u16 = 0xFF04;
 /// User facing timer

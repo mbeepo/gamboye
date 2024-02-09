@@ -47,7 +47,7 @@ fn main() {
                     let len = args.len();
 
                     if len == 1 || len > 3 {
-                        println!("Usage: stack <DOWN:int> [UP:int]");
+                        println!("Usage: stack <DOWN:u16> [UP:u16]");
                     } else {
                         if let Ok(down) = args[1].parse::<u16>() {
                             let up = if len == 3 {
@@ -140,6 +140,26 @@ fn main() {
                     }
 
                     emu.cpu.ppu.debug_show(&emu.cpu.memory)
+                } else if input.starts_with("show ") {
+                    // Usage: show <ADDR:int>
+                    // Prints the value stored in memory at ADDR
+
+                    let args: Vec<&str> = input.split(" ").collect();
+                    let len = args.len();
+
+                    if len == 1 {
+                        println!("Usage: show <ADDR:u16>");
+                    } else {
+                        if let Ok(addr) = u16::from_str_radix(args[1], 16) {
+                            if let Some(value) = emu.cpu.memory.load(addr) {
+                                println!("[{addr:#06X}] - {value:#04X}");
+                            } else {
+                                println!("Failed to read [{addr:#06X}");
+                            };
+                        } else {
+                            println!("ADDR must be a u16");
+                        }
+                    }
                 } else if input == "exit" {
                     return;
                 }
