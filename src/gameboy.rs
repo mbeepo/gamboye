@@ -24,11 +24,13 @@ impl Gbc {
     }
 
     /// Entry point for the emulator
-    pub fn start(&mut self) {
-        self.cpu.main_loop();
-    }
+    // pub fn start(&mut self) {
+    //     self.cpu.main_loop();
+    // }
 
     /// Move the system forward by one CPU tick
+    /// 
+    /// `fb` must have a length of 4 * 160 * 144 (91,260)
     pub fn step(&mut self) -> (Result<CpuStatus, CpuError>, PpuStatus) {
         (self.cpu.step(), self.cpu.ppu.status)
     }
@@ -38,8 +40,9 @@ impl Gbc {
         self.cpu.memory.read_serial()
     }
 
-    /// Copies the internal framebuffer to a slice
-    pub fn draw(&self, fb: &mut [u8]) {
-        fb.copy_from_slice(&self.cpu.ppu.fb);
-    }
+    // / Copies the internal framebuffer to a slice
+    // pub fn draw(&mut self, fb: &mut [u8]) {
+    //     // fb.copy_from_slice(&self.cpu.ppu.fb);
+    //     fb.swap_with_slice(&mut self.cpu.ppu.fb);
+    // }
 }

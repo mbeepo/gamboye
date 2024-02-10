@@ -1,3 +1,5 @@
+//! Epic fail ! the benchmarks were ignored after not working and will not be worked on again ! i wont delete them though !
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use gbc::{Gbc, MbcSelector, RamSize, RomSize};
 

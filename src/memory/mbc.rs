@@ -87,7 +87,7 @@ impl RamSize {
 }
 
 /// Switchable rom bank using mappers. Stands for Memory Bank Controller
-pub trait Mbc {
+pub trait Mbc: Send + Sync {
     /// Gets the byte at global address `addr`
     fn load(&self, addr: u16) -> Option<u8>;
     /// Sets the cell at global address `addr` to `value`

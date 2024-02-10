@@ -16,7 +16,7 @@ fn main() {
         _ => panic!("Unsupported MBC"),
     };
 
-    let mut emu = Gbc::new(mbc, false, true);
+    let mut emu = Gbc::new(mbc, None, None, false, true);
     emu.load_rom(&data);
 
     let mut file = std::fs::OpenOptions::new()

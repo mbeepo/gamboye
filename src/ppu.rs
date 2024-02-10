@@ -41,10 +41,9 @@ pub struct Ppu {
     pub stat: u8,
     pub coords: PpuCoords,
     pub palette: Palette,
-    pub fb: [u8; 4 * WIDTH as usize * HEIGHT as usize],
-    pub debug_fb: Option<[u8; 4 * VRAM_DISPLAY_WIDTH * VRAM_DISPLAY_HEIGHT]>,
     pub objects: [Option<Object>; 10],
     pub status: PpuStatus,
+    pub queue: Vec<Pixel>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -61,13 +60,13 @@ enum AddressType {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct PpuCoords {
+pub struct PpuCoords {
     x: u8,
     y: u8,
 }
 
 #[derive(Clone, Copy, Debug)]
-struct Palette {
+pub struct Palette {
     colors: [u32; 4],
 }
 
@@ -75,6 +74,13 @@ struct Palette {
 pub enum PpuStatus {
     Drawing,
     VBlank,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Pixel {
+    pub x: u8,
+    pub y: u8,
+    pub color: u32,
 }
 
 impl Palette {
@@ -117,20 +123,18 @@ impl Ppu {
         let stat = 0;
         let coords = PpuCoords { x: 0, y: 0 };
         let palette = Palette::new();
-        let fb = [0; 4 * WIDTH as usize * HEIGHT as usize];
-        let debug_fb = None;
         let objects = [None; 10];
         let status = PpuStatus::Drawing;
+        let queue = Vec::with_capacity(16);
 
         Self {
             lcdc,
             stat,
             coords,
             palette,
-            fb,
-            debug_fb,
             objects,
             status,
+            queue,
         }
     }
     
@@ -197,8 +201,11 @@ impl Ppu {
         let color_value = (high << 1) | low;
         let color = self.palette[color_value];
 
-        let index = self.coords.x as usize + self.coords.y as usize * WIDTH as usize;
-        self.fb[index*4..index*4+4].copy_from_slice(&color.to_be_bytes());
+        let pixel = Pixel { x: self.coords.x, y: self.coords.y, color };
+        self.queue.push(pixel);
+
+        // let index = self.coords.x as usize + self.coords.y as usize * WIDTH as usize;
+        // fb[index*4..index*4+4].copy_from_slice(&color.to_be_bytes());
 
         self.coords.x += 1;
 
@@ -234,53 +241,51 @@ impl Ppu {
     }
 
     /// Initializes the VRAM debug framebuffer
-    pub fn init_debug(&mut self) {
-        self.debug_fb = Some([0; 4 * VRAM_DISPLAY_WIDTH * VRAM_DISPLAY_HEIGHT]);
-    }
+    // pub fn init_debug(&mut self) {
+    //     self.debug_fb = Some([0; 4 * VRAM_DISPLAY_WIDTH * VRAM_DISPLAY_HEIGHT]);
+    // }
 
     /// Refreshes the VRAM debug window, rendering the current VRAM tile data
-    pub fn debug_show(&mut self, memory: &Mmu) {
-        if let Some(ref mut fb) = &mut self.debug_fb {
-            // go through VRAM and put each pixel into fb
-            const BYTES_PER_TILE_ROW: u8 = ROW_SIZE;
-            const TILES_PER_ROW: usize = VRAM_WIDTH_IN_TILES;
-            const ROWS: usize = VRAM_HEIGHT_IN_TILES;
-            const START_ADDR: u16 = UNSIGNED_BASE;
+    pub fn debug_show(&mut self, memory: &Mmu, fb: &mut [u8]) {
+        // go through VRAM and put each pixel into fb
+        const BYTES_PER_TILE_ROW: u8 = ROW_SIZE;
+        const TILES_PER_ROW: usize = VRAM_WIDTH_IN_TILES;
+        const ROWS: usize = VRAM_HEIGHT_IN_TILES;
+        const START_ADDR: u16 = UNSIGNED_BASE;
 
-            let mut current_addr: u16 = START_ADDR;
+        let mut current_addr: u16 = START_ADDR;
 
-            for row in 0..ROWS {
-                for tile in 0..TILES_PER_ROW {
-                    for tile_row in 0..TILE_HEIGHT {
-                        let tiles = memory.load_block(current_addr, current_addr + 1);
+        for row in 0..ROWS {
+            for tile in 0..TILES_PER_ROW {
+                for tile_row in 0..TILE_HEIGHT {
+                    let tiles = memory.load_block(current_addr, current_addr + 1);
 
-                        for col in 0..TILE_WIDTH {
-                            let x_offset = TILE_WIDTH - 1 - col;
+                    for col in 0..TILE_WIDTH {
+                        let x_offset = TILE_WIDTH - 1 - col;
 
-                            if row == 0 && tile == 0 && tile_row == 0 {
-                                println!("col: {col}");
-                                println!("x_offset: {x_offset}");
-                            }
-
-                            // extract relevant bits
-                            // we shift the color bytes first so it's less messy to get 0 or 1
-                            // first byte in memory has its bits after the second byte, probably cause little endian
-                            let low = (tiles[0] >> x_offset) & 1;
-                            let high = (tiles[1] >> x_offset) & 1;
-    
-                            // high gets shifted up to fill in the upper bit
-                            let color_value = (high << 1) | low;
-                            let color = self.palette[color_value];
-
-                            let x = tile * TILE_WIDTH as usize + col as usize;
-                            let y = row * TILE_HEIGHT as usize + tile_row as usize;
-
-                            let index = x as usize + y as usize * VRAM_DISPLAY_WIDTH as usize;
-                            fb[index*4..index*4+4].copy_from_slice(&color.to_be_bytes());
+                        if row == 0 && tile == 0 && tile_row == 0 {
+                            println!("col: {col}");
+                            println!("x_offset: {x_offset}");
                         }
 
-                        current_addr += BYTES_PER_TILE_ROW as u16;
+                        // extract relevant bits
+                        // we shift the color bytes first so it's less messy to get 0 or 1
+                        // first byte in memory has its bits after the second byte, probably cause little endian
+                        let low = (tiles[0] >> x_offset) & 1;
+                        let high = (tiles[1] >> x_offset) & 1;
+
+                        // high gets shifted up to fill in the upper bit
+                        let color_value = (high << 1) | low;
+                        let color = self.palette[color_value];
+
+                        let x = tile * TILE_WIDTH as usize + col as usize;
+                        let y = row * TILE_HEIGHT as usize + tile_row as usize;
+
+                        let index = x as usize + y as usize * VRAM_DISPLAY_WIDTH as usize;
+                        fb[index*4..index*4+4].copy_from_slice(&color.to_be_bytes());
                     }
+
+                    current_addr += BYTES_PER_TILE_ROW as u16;
                 }
             }
         }

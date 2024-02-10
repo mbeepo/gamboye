@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     memory::{self, Mmu},
-    ppu::Ppu,
+    ppu::Ppu, PpuStatus,
 };
 
 use self::{
