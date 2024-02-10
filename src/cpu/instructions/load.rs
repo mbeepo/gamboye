@@ -1,10 +1,10 @@
-use crate::cpu::Cpu;
+use crate::cpu::{Cpu, CpuError};
 
 use super::{AddressSource, ByteAddressSource, ByteSource, ByteTarget, LoadType, WordTarget};
 
 impl Cpu {
     /// Loads data from one place to another
-    pub(crate) fn ld(&mut self, transfer: LoadType) -> Result<u16, u16> {
+    pub(crate) fn ld(&mut self, transfer: LoadType) -> Result<u16, CpuError> {
         match transfer {
             LoadType::Byte(target, source) => {
                 let value = match source {
@@ -172,7 +172,7 @@ mod tests {
 
     fn init() -> Cpu {
         let mmu = Mmu::new(MbcSelector::NoMbc);
-        let ppu = Ppu::new_headless();
+        let ppu = Ppu::new();
 
         Cpu::new(mmu, ppu, false, true)
     }

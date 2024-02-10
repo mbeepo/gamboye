@@ -1,10 +1,10 @@
-use crate::cpu::Cpu;
+use crate::cpu::{Cpu, CpuError};
 
 use super::JumpTest;
 
 impl Cpu {
     /// Jumps to the address contained in the next two bytes if JumpTest succeeds
-    pub(crate) fn jp(&mut self, test: JumpTest) -> Result<u16, u16> {
+    pub(crate) fn jp(&mut self, test: JumpTest) -> Result<u16, CpuError> {
         let jump = match test {
             JumpTest::NotZero => !self.regs.get_zf(),
             JumpTest::Zero => self.regs.get_zf(),
@@ -23,7 +23,7 @@ impl Cpu {
     }
 
     /// Jumps by a number of addresses as specified by the next byte
-    pub(crate) fn jr(&mut self, test: JumpTest) -> Result<u16, u16> {
+    pub(crate) fn jr(&mut self, test: JumpTest) -> Result<u16, CpuError> {
         let jump = match test {
             JumpTest::NotZero => !self.regs.get_zf(),
             JumpTest::Zero => self.regs.get_zf(),
@@ -48,7 +48,7 @@ impl Cpu {
     }
 
     /// Jumps to the address stored at the head of the stack
-    pub(crate) fn ret(&mut self, test: JumpTest) -> Result<u16, u16> {
+    pub(crate) fn ret(&mut self, test: JumpTest) -> Result<u16, CpuError> {
         let jump = match test {
             JumpTest::NotZero => !self.regs.get_zf(),
             JumpTest::Zero => self.regs.get_zf(),
@@ -66,14 +66,14 @@ impl Cpu {
     }
 
     /// Jumps to the address stored in the stack, and sets IME to 1
-    pub(crate) fn reti(&mut self) -> Result<u16, u16> {
+    pub(crate) fn reti(&mut self) -> Result<u16, CpuError> {
         self.regs.ime = true;
 
         self.pop_word()
     }
 
     /// Pushes PC to the stack and jumps to an immediate address
-    pub(crate) fn call(&mut self, test: JumpTest) -> Result<u16, u16> {
+    pub(crate) fn call(&mut self, test: JumpTest) -> Result<u16, CpuError> {
         let jump = match test {
             JumpTest::NotZero => !self.regs.get_zf(),
             JumpTest::Zero => self.regs.get_zf(),
@@ -128,7 +128,7 @@ mod tests {
 
     fn init() -> Cpu {
         let mmu = Mmu::new(MbcSelector::NoMbc);
-        let ppu = Ppu::new_headless();
+        let ppu = Ppu::new();
 
         Cpu::new(mmu, ppu, false, true)
     }

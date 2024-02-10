@@ -1,9 +1,9 @@
 use super::{Mbc, MbcAddr};
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct NoMbc {
-    pub(crate) rom: [Option<u8>; 0x8000],
-    pub(crate) ram: [Option<u8>; 0x2000],
+    pub(crate) rom: Box<[Option<u8>; 0x8000]>,
+    pub(crate) ram: Box<[Option<u8>; 0x2000]>,
 }
 
 impl Mbc for NoMbc {

@@ -1,11 +1,9 @@
-use std::{time::Instant, ops::Index};
-
-use minifb::{Window, WindowOptions};
+use std::ops::Index;
 
 use crate::{memory::{OAM, OAM_END, SCX, SCY}, Mmu};
 
 // darkening shades of grey
-const PALETTE: [u32; 4] = [0x00FFFFFF, 0x00AAAAAA, 0x00555555, 0x00000000];
+const PALETTE: [u32; 4] = [0xFFFFFFFF, 0xAAAAAAFF, 0x555555FF, 0x000000FF];
 
 // screen and sprite dimensions
 const WIDTH: u8 = 160;
@@ -39,15 +37,14 @@ const VRAM_DISPLAY_HEIGHT: usize = TILE_HEIGHT as usize * VRAM_HEIGHT_IN_TILES;
 
 #[derive(Debug)]
 pub struct Ppu {
-    window: Option<Window>,
-    debug_window: Option<Window>,
-    lcdc: u8,
-    stat: u8,
-    coords: PpuCoords,
-    palette: Palette,
-    fb: [u32; WIDTH as usize * HEIGHT as usize],
-    debug_fb: Option<[u32; VRAM_DISPLAY_WIDTH * VRAM_DISPLAY_HEIGHT]>,
-    objects: [Option<Object>; 10],
+    pub lcdc: u8,
+    pub stat: u8,
+    pub coords: PpuCoords,
+    pub palette: Palette,
+    pub fb: [u8; 4 * WIDTH as usize * HEIGHT as usize],
+    pub debug_fb: Option<[u8; 4 * VRAM_DISPLAY_WIDTH * VRAM_DISPLAY_HEIGHT]>,
+    pub objects: [Option<Object>; 10],
+    pub status: PpuStatus,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -72,6 +69,12 @@ struct PpuCoords {
 #[derive(Clone, Copy, Debug)]
 struct Palette {
     colors: [u32; 4],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum PpuStatus {
+    Drawing,
+    VBlank,
 }
 
 impl Palette {
@@ -110,29 +113,16 @@ impl Index<u8> for Palette {
 
 impl Ppu {
     pub fn new() -> Self {
-        let window = match Window::new(
-            "Beef Wellington",
-            WIDTH as usize * SCALE,
-            HEIGHT as usize * SCALE,
-            WindowOptions::default(),
-        ) {
-            Ok(win) => Some(win),
-            Err(err) => {
-                panic!("Unable to create window: {}", err);
-            }
-        };
-        let debug_window = None;
         let lcdc = 0;
         let stat = 0;
         let coords = PpuCoords { x: 0, y: 0 };
         let palette = Palette::new();
-        let fb = [0; WIDTH as usize * HEIGHT as usize];
+        let fb = [0; 4 * WIDTH as usize * HEIGHT as usize];
         let debug_fb = None;
         let objects = [None; 10];
+        let status = PpuStatus::Drawing;
 
         Self {
-            window,
-            debug_window,
             lcdc,
             stat,
             coords,
@@ -140,171 +130,117 @@ impl Ppu {
             fb,
             debug_fb,
             objects,
-        }
-    }
-
-    pub fn new_headless() -> Self {
-        let window = None;
-        let debug_window = None;
-        let lcdc = 0;
-        let stat = 0;
-        let coords = PpuCoords { x: 0, y: 0 };
-        let palette = Palette::new();
-        let fb = [0; WIDTH as usize * HEIGHT as usize];
-        let debug_fb = None;
-        let objects = [None; 10];
-
-        Self {
-            window,
-            debug_window,
-            lcdc,
-            stat,
-            coords,
-            palette,
-            fb,
-            debug_fb,
-            objects,
+            status,
         }
     }
     
+    /// Returns status of PPU (either `Drawing` or `VBlank`)
+    /// 
     /// TODO:
     /// - BG Enable (Don't show BG if LCDC.0 is cleared)
     /// - Window
     /// - Sprites
     pub fn tick(&mut self, memory: &Mmu) {
-        // if rendering is enabled
-        if let Some(ref mut window) = &mut self.window {
-            let address_type = if self.lcdc & (1 << 4) > 0 {
-                AddressType::Unsigned
-            } else {
-                AddressType::Signed
-            };
+        let address_type = if self.lcdc & (1 << 4) > 0 {
+            AddressType::Unsigned
+        } else {
+            AddressType::Signed
+        };
 
-            let bg_map_area: u16 = if self.lcdc & (1 << 3) > 0 {
-                0x9C00
-            } else {
-                0x9800
-            };
+        let bg_map_area: u16 = if self.lcdc & (1 << 3) > 0 {
+            0x9C00
+        } else {
+            0x9800
+        };
 
-            let tile_x = (self.coords.x / TILE_WIDTH + memory.load(SCX).unwrap_or(0) / TILE_WIDTH) % WIDTH_IN_TILES;
-            let tile_y = (self.coords.y + memory.load(SCY).unwrap_or(0)) / TILE_HEIGHT;
-            let tilemap_offset = tile_x as usize + tile_y as usize * WIDTH_IN_TILES as usize;
-            let tilemap_addr = bg_map_area + tilemap_offset as u16;
+        let tile_x = (self.coords.x / TILE_WIDTH + memory.load(SCX).unwrap_or(0) / TILE_WIDTH) % WIDTH_IN_TILES;
+        let tile_y = (self.coords.y + memory.load(SCY).unwrap_or(0)) / TILE_HEIGHT;
+        let tilemap_offset = tile_x as usize + tile_y as usize * WIDTH_IN_TILES as usize;
+        let tilemap_addr = bg_map_area + tilemap_offset as u16;
 
-            // the byte in the tilemap points to the offset of the tile data
-            let tile_data_offset = memory.load(tilemap_addr).unwrap_or(0);
+        // the byte in the tilemap points to the offset of the tile data
+        let tile_data_offset = memory.load(tilemap_addr).unwrap_or(0);
 
-            // get the y offset within the tile
-            let tile_y_offset = (self.coords.y + memory.load(SCY).unwrap_or(0)) % TILE_HEIGHT;
+        // get the y offset within the tile
+        let tile_y_offset = (self.coords.y + memory.load(SCY).unwrap_or(0)) % TILE_HEIGHT;
 
-            // calculate the start address of the tile data for the current line
-            // TODO: Fix this mess
-            let tile_data_addr = if let Some(Some(object)) = self.objects.iter().find(
-                |object|
-                    object.is_some() && (self.coords.x + 8).overflowing_sub(object.unwrap().x).0 < 8)
-            {
-                let out = (UNSIGNED_BASE + object.index as u16 * TILE_BYTES as u16) + (tile_y_offset as u16 * ROW_SIZE as u16);
-                println!("Sprite addr ({}, {}): {out:#06X}", self.coords.x, self.coords.y);
-                out
-            } else {
-                address_type.convert_offset(
-                    (tile_data_offset as u16 * TILE_BYTES as u16) + (tile_y_offset as u16 * ROW_SIZE as u16),
-                )
-            };
+        // calculate the start address of the tile data for the current line
+        // TODO: Fix this mess
+        let tile_data_addr = if let Some(Some(object)) = self.objects.iter().find(
+            |object|
+                object.is_some() && (self.coords.x + 8).overflowing_sub(object.unwrap().x).0 < 8)
+        {
+            let out = (UNSIGNED_BASE + object.index as u16 * TILE_BYTES as u16) + (tile_y_offset as u16 * ROW_SIZE as u16);
+            out
+        } else {
+            address_type.convert_offset(
+                (tile_data_offset as u16 * TILE_BYTES as u16) + (tile_y_offset as u16 * ROW_SIZE as u16),
+            )
+        };
 
-            // get the current line of the tile data
-            // 2 bytes per sprite row, combined into 8 2-bit values
-            let tiles = memory.load_block(tile_data_addr, tile_data_addr + 1);
+        // get the current line of the tile data
+        // 2 bytes per sprite row, combined into 8 2-bit values
+        let tiles = memory.load_block(tile_data_addr, tile_data_addr + 1);
 
-            // horizontal offset of the bit within the sprite
-            // we're just rendering one pixel here
-            // this will be more efficient when we implement the FIFO
-            let x_offset = TILE_WIDTH - 1 - self.coords.x % TILE_WIDTH;
+        // horizontal offset of the bit within the sprite
+        // we're just rendering one pixel here
+        // this will be more efficient when we implement the FIFO
+        let x_offset = TILE_WIDTH - 1 - self.coords.x % TILE_WIDTH;
 
-            // extract relevant bits
-            // we shift the color bytes first so it's less messy to get 0 or 1
-            // first byte in memory has its bits after the second byte, probably cause little endian
-            let low = (tiles[0] >> x_offset) & 1;
-            let high = (tiles[1] >> x_offset) & 1;
+        // extract relevant bits
+        // we shift the color bytes first so it's less messy to get 0 or 1
+        // first byte in memory has its bits after the second byte, probably cause little endian
+        let low = (tiles[0] >> x_offset) & 1;
+        let high = (tiles[1] >> x_offset) & 1;
 
-            // high gets shifted up to fill in the upper bit
-            let color_value = (high << 1) | low;
-            let color = self.palette[color_value];
+        // high gets shifted up to fill in the upper bit
+        let color_value = (high << 1) | low;
+        let color = self.palette[color_value];
 
-            self.fb[self.coords.x as usize + self.coords.y as usize * WIDTH as usize] = color;
+        let index = self.coords.x as usize + self.coords.y as usize * WIDTH as usize;
+        self.fb[index*4..index*4+4].copy_from_slice(&color.to_be_bytes());
 
-            self.coords.x += 1;
+        self.coords.x += 1;
 
-            if self.coords.x == WIDTH {
-                self.coords.x = 0;
-                self.coords.y += 1;
+        self.status = PpuStatus::Drawing;
 
-                if self.coords.y == HEIGHT {
-                    self.coords.y = 0;
-                    window
-                        .update_with_buffer(&self.fb, WIDTH as usize, HEIGHT as usize)
-                        .expect("Couldn't draw to window");
+        if self.coords.x == WIDTH {
+            self.coords.x = 0;
+            self.coords.y += 1;
+
+            if self.coords.y == HEIGHT {
+                self.coords.y = 0;
+                self.status = PpuStatus::VBlank;
+            }
+
+            // find objects on this line
+            // TODO: Update for 8x16
+            self.objects = Default::default();
+            let objects = memory.load_block(OAM, OAM_END);
+            let mut object_index = 0;
+
+            for index in 0..objects.len() / 4 {
+                let object_bytes = &objects[index*4..index*4+4];
+                let object: Object = object_bytes.into();
+
+                if (self.coords.y + 16).overflowing_sub(object.y).0 < 8 {
+                    self.objects[object_index] = Some(object);
+                    object_index += 1;
+
+                    if object_index == 10 { break; }
                 }
-
-                // find objects on this line
-                // TODO: Update for 8x16
-                self.objects = Default::default();
-                let objects = memory.load_block(OAM, OAM_END);
-                let mut object_index = 0;
-
-                for index in 0..objects.len() / 4 {
-                    let object_bytes = &objects[index*4..index*4+4];
-                    let object: Object = object_bytes.into();
-
-                    if (self.coords.y + 16).overflowing_sub(object.y).0 < 8 {
-                        self.objects[object_index] = Some(object);
-                        object_index += 1;
-
-                        if object_index == 10 { break; }
-                    }
-                }
-
-                // Too big scary iterator ow oof
-                // 
-                // let mut objects = memory.load_block(OAM, OAM_END).chunks(4)
-                //     .into_iter()
-                //     .map(|chunk| chunk.into())
-                //     .filter(|object: &Object| self.coords.y - object.y < 8)
-                //     .take(10)
-                //     .map(|object| Some(object))
-                //     .collect::<Vec<Option<Object>>>();
-                // 
-                // objects.resize(10, None);
-                // 
-                // self.objects = objects.as_slice()
-                //     .try_into()
-                //     .unwrap();
             }
         }
     }
 
-    /// Initializes the VRAM debug window
-    /// Note: this does not render anything in the window, you need to call Self::debug_show() for that
+    /// Initializes the VRAM debug framebuffer
     pub fn init_debug(&mut self) {
-        let debug_window = match Window::new(
-            "Beef Wellington Debug",
-            VRAM_DISPLAY_WIDTH * SCALE,
-            VRAM_DISPLAY_HEIGHT * SCALE,
-            WindowOptions::default(),
-        ) {
-            Ok(win) => Some(win),
-            Err(err) => {
-                panic!("Unable to create window: {}", err);
-            }
-        };
-
-        self.debug_window = debug_window;
-        self.debug_fb = Some([0; VRAM_DISPLAY_WIDTH * VRAM_DISPLAY_HEIGHT]);
+        self.debug_fb = Some([0; 4 * VRAM_DISPLAY_WIDTH * VRAM_DISPLAY_HEIGHT]);
     }
 
     /// Refreshes the VRAM debug window, rendering the current VRAM tile data
     pub fn debug_show(&mut self, memory: &Mmu) {
-        if let (Some(ref mut window), Some(ref mut fb)) = (&mut self.debug_window, &mut self.debug_fb) {
+        if let Some(ref mut fb) = &mut self.debug_fb {
             // go through VRAM and put each pixel into fb
             const BYTES_PER_TILE_ROW: u8 = ROW_SIZE;
             const TILES_PER_ROW: usize = VRAM_WIDTH_IN_TILES;
@@ -339,15 +275,14 @@ impl Ppu {
                             let x = tile * TILE_WIDTH as usize + col as usize;
                             let y = row * TILE_HEIGHT as usize + tile_row as usize;
 
-                            fb[x as usize + y as usize * VRAM_DISPLAY_WIDTH as usize] = color;
+                            let index = x as usize + y as usize * VRAM_DISPLAY_WIDTH as usize;
+                            fb[index*4..index*4+4].copy_from_slice(&color.to_be_bytes());
                         }
 
                         current_addr += BYTES_PER_TILE_ROW as u16;
                     }
                 }
             }
-
-            window.update_with_buffer(fb, VRAM_DISPLAY_WIDTH, VRAM_DISPLAY_HEIGHT).expect("Couldn't draw to VRAM window");
         }
     }
 

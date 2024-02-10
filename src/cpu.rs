@@ -1,6 +1,6 @@
+use core::fmt;
 use std::{
-    thread,
-    time::{Duration, Instant},
+    error::Error, thread, time::{Duration, Instant}
 };
 
 use crate::{
@@ -127,7 +127,7 @@ impl Breakpoints {
     }
 }
 
-pub enum CpuState {
+pub enum CpuStatus {
     Run,
     Break,
     Stop,
@@ -258,7 +258,7 @@ impl Cpu {
     /// - `Ok(true)` if operation should continue
     /// - `Ok(false)` if STOP was called and execution should stop
     /// - `Err(addr)` if there was an attempt to read from uninitialized memory
-    pub(crate) fn step(&mut self) -> Result<CpuState, u16> {
+    pub(crate) fn step(&mut self) -> Result<CpuStatus, CpuError> {
         if self.debug {
             println!("Loading instruction")
         }
@@ -267,13 +267,13 @@ impl Cpu {
             let Some(ie) = self
                 .memory
                 .load(memory::IE) else {
-                    return Err(memory::IE);
+                    return Err(CpuError::MemoryLoadFail(memory::IE));
                 };
 
             let Some(if_reg) = self
                 .memory
                 .load(memory::IF) else {
-                    return Err(memory::IF);
+                    return Err(CpuError::MemoryLoadFail(memory::IF));
                 };
 
             if ie & if_reg > 0 {
@@ -281,7 +281,7 @@ impl Cpu {
             }
 
             self.tick();
-            return Ok(CpuState::Run);
+            return Ok(CpuStatus::Run);
         }
 
         let instruction_byte = self.mem_load(self.regs.pc)?;
@@ -302,7 +302,7 @@ impl Cpu {
         };
 
         if self.stop {
-            return Ok(CpuState::Stop);
+            return Ok(CpuStatus::Stop);
         }
 
         self.regs.pc = next_pc;
@@ -316,7 +316,7 @@ impl Cpu {
         }
 
         self.handle_interrupts();
-        Ok(CpuState::Run)
+        Ok(CpuStatus::Run)
     }
 
     // TODO: clean this up (enum probably)
@@ -365,7 +365,7 @@ impl Cpu {
     }
 
     /// Executes a single instruction
-    pub(crate) fn execute(&mut self, instruction: Instruction) -> Result<u16, u16> {
+    pub(crate) fn execute(&mut self, instruction: Instruction) -> Result<u16, CpuError> {
         if self.debug {
             println!("\nExecuting instruction");
             dbg!(instruction);
@@ -644,7 +644,7 @@ impl Cpu {
     /// ### Return Variants
     /// - `Ok(value)` if a byte was read successfully
     /// - `Err(addr)` if the byte at the address was uninitialized, and `Self::allow_uninit` is false
-    fn mem_load(&mut self, addr: u16) -> Result<u8, u16> {
+    fn mem_load(&mut self, addr: u16) -> Result<u8, CpuError> {
         if self.debug {
             print!("[LOAD] {addr:#06X}");
         }
@@ -665,7 +665,7 @@ impl Cpu {
                     println!();
                 }
 
-                Err(addr)
+                Err(CpuError::MemoryLoadFail(addr))
             }
         }
     }
@@ -699,7 +699,7 @@ impl Cpu {
         self.memory.set(addr, value);
     }
 
-    fn load_from_hl(&mut self) -> Result<u8, u16> {
+    fn load_from_hl(&mut self) -> Result<u8, CpuError> {
         self.mem_load(self.regs.get_hl())
     }
 
@@ -707,30 +707,41 @@ impl Cpu {
         self.mem_set(self.regs.get_hl(), value);
     }
 
-    fn load_a16(&mut self) -> Result<u16, u16> {
+    fn load_a16(&mut self) -> Result<u16, CpuError> {
         let low_addr = self.regs.pc.wrapping_add(1);
         let high_addr = self.regs.pc.wrapping_add(2);
 
         let low = if let Ok(low) = self.mem_load(low_addr) {
             low as u16
         } else {
-            return Err(low_addr);
+            return Err(CpuError::MemoryLoadFail(low_addr));
         };
 
         let high = if let Ok(high) = self.mem_load(high_addr) {
             high as u16
         } else {
-            return Err(high_addr);
+            return Err(CpuError::MemoryLoadFail(high_addr));
         };
 
         Ok((high << 8) | low)
     }
 
-    fn load_d8(&mut self) -> Result<u8, u16> {
+    fn load_d8(&mut self) -> Result<u8, CpuError> {
         self.mem_load(self.regs.pc.wrapping_add(1))
     }
 
-    fn load_s8(&mut self) -> Result<i8, u16> {
+    fn load_s8(&mut self) -> Result<i8, CpuError> {
         Ok(self.load_d8()? as i8)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum CpuError {
+    MemoryLoadFail(u16),
+}
+
+impl fmt::Display for CpuError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Emulated CPU encountered an error: {:#?}", self)
     }
 }

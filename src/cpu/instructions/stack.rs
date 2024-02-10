@@ -1,8 +1,8 @@
-use crate::cpu::Cpu;
+use crate::cpu::{Cpu, CpuError};
 
 impl Cpu {
     /// Pops a word from the stack
-    pub(crate) fn pop_word(&mut self) -> Result<u16, u16> {
+    pub(crate) fn pop_word(&mut self) -> Result<u16, CpuError> {
         let low = self.pop()? as u16;
         let high = self.pop()? as u16;
 
@@ -21,7 +21,7 @@ impl Cpu {
     }
 
     /// Pops a byte from the stack
-    pub(crate) fn pop(&mut self) -> Result<u8, u16> {
+    pub(crate) fn pop(&mut self) -> Result<u8, CpuError> {
         let out = self.mem_load(self.regs.sp);
         self.regs.sp = self.regs.sp.wrapping_add(1);
 
@@ -45,7 +45,7 @@ mod tests {
 
     fn init() -> Cpu {
         let mmu = Mmu::new(MbcSelector::NoMbc);
-        let ppu = Ppu::new_headless();
+        let ppu = Ppu::new();
 
         Cpu::new(mmu, ppu, false, true)
     }

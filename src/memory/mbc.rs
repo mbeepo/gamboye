@@ -108,8 +108,8 @@ pub trait Mbc {
 pub fn init_mbc(kind: MbcSelector) -> Box<dyn Mbc> {
     match kind {
         MbcSelector::NoMbc => Box::new(NoMbc {
-            rom: [None; 0x8000],
-            ram: [None; 0x2000],
+            rom: Box::new([None; 0x8000]),
+            ram: Box::new([None; 0x2000]),
         }),
         MbcSelector::Mbc1(rom_size, ram_size) => {
             let rom_banks = match rom_size {

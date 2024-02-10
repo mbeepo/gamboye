@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use gbc::{Gbc, MbcSelector, RamSize, RomSize, MBC_ADDR, CpuState};
+use gbc::{CpuError, CpuStatus, Gbc, MbcSelector, RamSize, RomSize, MBC_ADDR};
 
 fn main() {
     println!("Start");
@@ -173,14 +173,14 @@ fn main() {
         }
 
         match emu.step() {
-            Ok(go) => {
+            (Ok(go), _) => {
                 match go {
-                    CpuState::Stop => {
+                    CpuStatus::Stop => {
                         println!("----- STOP instruction reached -----");
                         println!("Serial buffer: {}", serial_buf);
                         return;
                     }
-                    CpuState::Run => {
+                    CpuStatus::Run => {
                         let serial = emu.read_serial();
                 
                         if serial != 0xFF {
@@ -188,12 +188,15 @@ fn main() {
                             serial_buf += &format!("{}", serial as char);
                         }
                     }
-                    CpuState::Break => {}
+                    CpuStatus::Break => {}
                 }
             }
-            Err(addr) => {
+            (Err(e), _) => {
                 stepping = true;
-                println!("[ERR] Accessed uninitialized memory at {addr:#04X}");
+
+                match e {
+                    CpuError::MemoryLoadFail(addr) => println!("[ERR] Accessed uninitialized memory at {addr:#04X}")
+                }
             }
         }
     }

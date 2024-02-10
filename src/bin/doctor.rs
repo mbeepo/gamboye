@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use gbc::{Gbc, MbcSelector, RamSize, RomSize, CpuState};
+use gbc::{CpuError, CpuStatus, Gbc, MbcSelector, RamSize, RomSize};
 
 fn main() {
     let filename = std::env::args().nth(1).unwrap();
@@ -16,7 +16,7 @@ fn main() {
         _ => panic!("Unsupported MBC"),
     };
 
-    let mut emu = Gbc::new_headless(mbc, false, true);
+    let mut emu = Gbc::new(mbc, false, true);
     emu.load_rom(&data);
 
     let mut file = std::fs::OpenOptions::new()
@@ -35,14 +35,14 @@ fn main() {
 
     loop {
         match emu.step() {
-            Ok(go) => {
+            (Ok(go), _) => {
                 match go {
-                    CpuState::Stop => {
+                    CpuStatus::Stop => {
                         println!("----- STOP instruction reached -----");
                         println!("Serial buffer: {}", serial_buf);
                         return;
                     }
-                    CpuState::Run => {
+                    CpuStatus::Run => {
                         let pc = emu.cpu.regs.pc;
                         let pcmem = emu.cpu.memory.load_block(pc, pc + 3);
                         let out = format!("A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X}\n",
@@ -61,11 +61,13 @@ fn main() {
                             }
                         }
                     }
-                    CpuState::Break => {}
+                    CpuStatus::Break => {}
                 }
             }
-            Err(addr) => {
-                println!("[ERR] Accessed uninitialized memory at {addr:#04X}");
+            (Err(e), _) => {
+                match e {
+                    CpuError::MemoryLoadFail(addr) => println!("[ERR] Accessed uninitialized memory at {addr:#04X}")
+                }
             }
         }
     }

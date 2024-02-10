@@ -10,7 +10,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 fn init() {
     let mbc = MbcSelector::NoMbc;
 
-    Gbc::new_headless(mbc, false, true);
+    Gbc::new(mbc, false, true);
 }
 
 fn load_acid() -> Gbc {
@@ -26,7 +26,7 @@ fn load_acid() -> Gbc {
         _ => panic!("Unsupported MBC"),
     };
 
-    let mut emu = Gbc::new_headless(mbc, false, true);
+    let mut emu = Gbc::new(mbc, false, true);
 
     emu.load_rom(&data);
 
