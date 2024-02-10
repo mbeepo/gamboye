@@ -61,10 +61,10 @@ pub struct Mmu {
     // A000 - BFFF
     mbc: Box<dyn Mbc>, // memory bank controller, for external switchable memory banks
     // 8000 - 9FFF
-    vram: VramBank, // video ram banks, only the first will be used for dmg, but either can be used for cgb
+    vram: Box<VramBank>, // video ram banks, only the first will be used for dmg, but either can be used for cgb
     // C000 - CFFF
     // D000 - DFFF
-    wram: WramBank, // 8 wram blocks, first one is always in C000 - CFFF, the rest are switchable in D000 - DFFF
+    wram: Box<WramBank>, // 8 wram blocks, first one is always in C000 - CFFF, the rest are switchable in D000 - DFFF
     // E000 - FDFF is mapped to $C000 - $DDFF
     // FE00 - FE9F
     oam: [Option<u8>; 0xA0], // sprite attribute table, display information for objects are stored here
@@ -81,8 +81,8 @@ impl Mmu {
     pub fn new(mbc_kind: MbcSelector) -> Self {
         Self {
             mbc: init_mbc(mbc_kind),
-            vram: VramBank::new(),
-            wram: WramBank::new(),
+            vram: Box::new(VramBank::new()),
+            wram: Box::new(WramBank::new()),
             oam: [None; 0xA0],
             io: init_io(),
             hram: [None; 0x7F],
