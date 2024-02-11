@@ -418,19 +418,8 @@ impl Cpu {
                     ArithmeticTarget::C => self.regs.c,
                     ArithmeticTarget::D => self.regs.d,
                     ArithmeticTarget::E => self.regs.e,
-                    ArithmeticTarget::H => {
-                        if self.regs.h == self.regs.a {
-                            println!("H: {:#04X}\nA: {:#04X}", self.regs.h, self.regs.a);
-                        }
-
-                        self.regs.h
-                    },
-                    ArithmeticTarget::L => {
-                        if self.regs.l == self.regs.a {
-                            println!("L: {:#04X}\nA: {:#04X}", self.regs.l, self.regs.a);
-                        }
-                        self.regs.l
-                    },
+                    ArithmeticTarget::H => self.regs.h,
+                    ArithmeticTarget::L => self.regs.l,
                     ArithmeticTarget::HL => self.load_from_hl()?,
                     ArithmeticTarget::Immediate => {
                         size = 2;

@@ -160,8 +160,10 @@ impl Ppu {
             0x9800
         };
 
-        let tile_x = (self.coords.x / TILE_WIDTH + memory.load(SCX).unwrap_or(0) / TILE_WIDTH) % WIDTH_IN_TILES;
-        let tile_y = (self.coords.y + memory.load(SCY).unwrap_or(0)) / TILE_HEIGHT;
+        let scy = memory.load(SCY).unwrap_or(0);
+
+        let tile_x = ((self.coords.x / TILE_WIDTH).wrapping_add(memory.load(SCX).unwrap_or(0) / TILE_WIDTH)) % WIDTH_IN_TILES;
+        let tile_y = (self.coords.y.wrapping_add(scy)) / TILE_HEIGHT;
         let tilemap_offset = tile_x as usize + tile_y as usize * WIDTH_IN_TILES as usize;
         let tilemap_addr = bg_map_area + tilemap_offset as u16;
 
@@ -169,7 +171,7 @@ impl Ppu {
         let tile_data_offset = memory.load(tilemap_addr).unwrap_or(0);
 
         // get the y offset within the tile
-        let tile_y_offset = (self.coords.y + memory.load(SCY).unwrap_or(0)) % TILE_HEIGHT;
+        let tile_y_offset = (self.coords.y.wrapping_add(scy)) % TILE_HEIGHT;
 
         // calculate the start address of the tile data for the current line
         // TODO: Fix this mess
