@@ -41,6 +41,7 @@ pub struct Ppu {
     pub stat: u8,
     pub coords: PpuCoords,
     pub palette: Palette,
+    pub fb: Vec<u8>,
     pub objects: [Option<Object>; 10],
     pub status: PpuStatus,
     pub queue: Vec<Pixel>,
@@ -123,6 +124,7 @@ impl Ppu {
         let stat = 0;
         let coords = PpuCoords { x: 0, y: 0 };
         let palette = Palette::new();
+        let fb = vec![0; 4 * WIDTH as usize * HEIGHT as usize];
         let objects = [None; 10];
         let status = PpuStatus::Drawing;
         let queue = Vec::with_capacity(16);
@@ -132,6 +134,7 @@ impl Ppu {
             stat,
             coords,
             palette,
+            fb,
             objects,
             status,
             queue,
@@ -201,11 +204,11 @@ impl Ppu {
         let color_value = (high << 1) | low;
         let color = self.palette[color_value];
 
-        let pixel = Pixel { x: self.coords.x, y: self.coords.y, color };
-        self.queue.push(pixel);
+        // let pixel = Pixel { x: self.coords.x, y: self.coords.y, color };
+        // self.queue.push(pixel);
 
-        // let index = self.coords.x as usize + self.coords.y as usize * WIDTH as usize;
-        // fb[index*4..index*4+4].copy_from_slice(&color.to_be_bytes());
+        let index = self.coords.x as usize + self.coords.y as usize * WIDTH as usize;
+        self.fb[index*4..index*4+4].copy_from_slice(&color.to_be_bytes());
 
         self.coords.x += 1;
 
