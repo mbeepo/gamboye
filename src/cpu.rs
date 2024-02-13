@@ -127,6 +127,7 @@ impl Breakpoints {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum CpuStatus {
     Run,
     Break,
