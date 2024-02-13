@@ -44,7 +44,6 @@ pub struct Ppu {
     pub fb: Vec<u8>,
     pub objects: [Option<Object>; 10],
     pub status: PpuStatus,
-    pub queue: Vec<Pixel>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -75,13 +74,6 @@ pub struct Palette {
 pub enum PpuStatus {
     Drawing,
     VBlank,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Pixel {
-    pub x: u8,
-    pub y: u8,
-    pub color: u32,
 }
 
 impl Palette {
@@ -127,7 +119,6 @@ impl Ppu {
         let fb = vec![0; 4 * WIDTH as usize * HEIGHT as usize];
         let objects = [None; 10];
         let status = PpuStatus::Drawing;
-        let queue = Vec::with_capacity(16);
 
         Self {
             lcdc,
@@ -137,7 +128,6 @@ impl Ppu {
             fb,
             objects,
             status,
-            queue,
         }
     }
     
