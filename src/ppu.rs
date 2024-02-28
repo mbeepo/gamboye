@@ -11,8 +11,6 @@ const HEIGHT: u8 = 144;
 const TILE_WIDTH: u8 = 8;
 const TILE_HEIGHT: u8 = 8;
 
-const SCALE: usize = 2;
-
 // number of bytes in a tile row
 const ROW_SIZE: u8 = 2;
 
