@@ -29,9 +29,6 @@ const SIGNED_BASE: u16 = 0x9000;
 // VRAM parameters for debug window
 const VRAM_LENGTH: u16 = 0x800 * 3;
 const VRAM_WIDTH_IN_TILES: usize = 24;
-const VRAM_HEIGHT_IN_TILES: usize = (VRAM_LENGTH as usize / TILE_BYTES as usize) / VRAM_WIDTH_IN_TILES;
-const VRAM_DISPLAY_WIDTH: usize = TILE_WIDTH as usize * VRAM_WIDTH_IN_TILES;
-const VRAM_DISPLAY_HEIGHT: usize = TILE_HEIGHT as usize * VRAM_HEIGHT_IN_TILES;
 
 #[derive(Debug)]
 pub struct Ppu {
@@ -114,7 +111,7 @@ impl Ppu {
         let stat = 0;
         let coords = PpuCoords { x: 0, y: 0 };
         let palette = Palette::new();
-        let fb = vec![0; 4 * WIDTH as usize * HEIGHT as usize];
+        let fb = vec![0; 3 * WIDTH as usize * HEIGHT as usize];
         let objects = [None; 10];
         let status = PpuStatus::Drawing;
 
@@ -198,7 +195,7 @@ impl Ppu {
         // self.queue.push(pixel);
 
         let index = self.coords.x as usize + self.coords.y as usize * WIDTH as usize;
-        self.fb[index*4..index*4+4].copy_from_slice(&color.to_be_bytes());
+        self.fb[index*3..index*3+3].copy_from_slice(&color.to_be_bytes()[0..3]);
 
         self.coords.x += 1;
 
@@ -239,27 +236,21 @@ impl Ppu {
     // }
 
     /// Refreshes the VRAM debug window, rendering the current VRAM tile data
-    pub fn debug_show(&mut self, memory: &Mmu, fb: &mut [u8]) {
+    pub fn debug_show(&mut self, memory: &Mmu, size: [usize; 2], fb: &mut [u8]) {
         // go through VRAM and put each pixel into fb
         const BYTES_PER_TILE_ROW: u8 = ROW_SIZE;
-        const TILES_PER_ROW: usize = VRAM_WIDTH_IN_TILES;
-        const ROWS: usize = VRAM_HEIGHT_IN_TILES;
         const START_ADDR: u16 = UNSIGNED_BASE;
 
+        let vram_display_width = TILE_WIDTH as usize * size[0];
         let mut current_addr: u16 = START_ADDR;
 
-        for row in 0..ROWS {
-            for tile in 0..TILES_PER_ROW {
+        for row in 0..(size[1]) {
+            for tile in 0..(size[0]) {
                 for tile_row in 0..TILE_HEIGHT {
                     let tiles = memory.load_block(current_addr, current_addr + 1);
 
                     for col in 0..TILE_WIDTH {
                         let x_offset = TILE_WIDTH - 1 - col;
-
-                        if row == 0 && tile == 0 && tile_row == 0 {
-                            println!("col: {col}");
-                            println!("x_offset: {x_offset}");
-                        }
 
                         // extract relevant bits
                         // we shift the color bytes first so it's less messy to get 0 or 1
@@ -274,8 +265,8 @@ impl Ppu {
                         let x = tile * TILE_WIDTH as usize + col as usize;
                         let y = row * TILE_HEIGHT as usize + tile_row as usize;
 
-                        let index = x as usize + y as usize * VRAM_DISPLAY_WIDTH as usize;
-                        fb[index*4..index*4+4].copy_from_slice(&color.to_be_bytes());
+                        let index = x as usize + y as usize * vram_display_width as usize;
+                        fb[index*3..index*3+3].copy_from_slice(&color.to_be_bytes()[0..3]);
                     }
 
                     current_addr += BYTES_PER_TILE_ROW as u16;
