@@ -1,4 +1,4 @@
-use std::ops::Index;
+use std::{fmt::Display, ops::Index};
 
 use crate::{memory::{OAM, OAM_END, SCX, SCY}, Mmu};
 
@@ -49,11 +49,11 @@ pub struct Lcdc {
 impl From<u8> for Lcdc {
     fn from(value: u8) -> Self {
         let lcd_enable = (value & 0b1000_0000) > 0;
-        let window_map_area = if (value & 0b0100_0000) > 0 { 0x9c00 } else { 0x9800 };
+        let window_map_area = if (value & 0b0100_0000) == 0 { 0x9800 } else { 0x9c00 };
         let window_enable = (value & 0b0010_0000) > 0;
-        let bg_addressing = if (value & 0b0001_0000) > 0 { AddressType::Signed } else { AddressType::Unsigned };
-        let bg_map_area = if (value & 0b0000_1000) > 0 { 0x9c00 } else { 0x9800 };
-        let obj_size = if (value & 0b0000_0100) > 0 { 16 } else { 8 };
+        let bg_addressing = if (value & 0b0001_0000) == 0 { AddressType::Signed } else { AddressType::Unsigned };
+        let bg_map_area = if (value & 0b0000_1000) == 0 { 0x9800 } else { 0x9c00 };
+        let obj_size = if (value & 0b0000_0100) == 0 { 8 } else { 16 };
         let obj_enable = (value & 0b0000_0010) > 0;
         let bg_enable = (value & 0b0000_0001) > 0;
 
@@ -109,6 +109,7 @@ pub struct Palette {
 #[derive(Clone, Copy, Debug)]
 pub enum PpuStatus {
     Drawing,
+    EnterVBlank,
     VBlank,
 }
 
@@ -162,6 +163,12 @@ impl Color {
     }
 }
 
+impl Display for Color {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Color {{ inner: {:#010X}, transparent: {} }}", self.inner, self.transparent)
+    }
+}
+
 impl Ppu {
     pub fn new() -> Self {
         let lcdc = 0x91.into();
@@ -191,11 +198,17 @@ impl Ppu {
     /// - Sprites
     pub fn tick(&mut self, memory: &Mmu) {
         match self.status {
+            PpuStatus::EnterVBlank => {
+                self.coords.x += 1;
+                self.status = PpuStatus::VBlank;
+                return;
+            },
             PpuStatus::VBlank => {
                 self.coords.x += 1;
 
                 if self.coords.x == WIDTH {
-                    let overflowed = self.coords.y.overflowing_add(1).1;
+                    let (new_y, overflowed) = self.coords.y.overflowing_add(1);
+                    self.coords.y = new_y;
 
                     if overflowed {
                         self.status = PpuStatus::Drawing;
@@ -211,7 +224,6 @@ impl Ppu {
         let bg_map_area: u16 = self.lcdc.bg_map_area;
 
         let scy = memory.load(SCY).unwrap_or(0);
-
         let tile_x = ((self.coords.x / TILE_WIDTH).wrapping_add(memory.load(SCX).unwrap_or(0) / TILE_WIDTH)) % WIDTH_IN_TILES;
         let tile_y = (self.coords.y.wrapping_add(scy)) / TILE_HEIGHT;
         let tilemap_offset = tile_x as usize + tile_y as usize * WIDTH_IN_TILES as usize;
@@ -247,6 +259,11 @@ impl Ppu {
             } else {
                 let color = self.decode_color(&obj_tile_line);
 
+                if self.coords.y < 2 {
+                    dbg!(obj);
+                    println!("{color}")
+                }
+
                 // color 0 is transparent for objects, so we should fall back to the background
                 if color.transparent {
                     self.decode_color(&bg_tile_line)
@@ -269,7 +286,7 @@ impl Ppu {
             self.coords.y += 1;
 
             if self.coords.y >= HEIGHT {
-                self.status = PpuStatus::VBlank;
+                self.status = PpuStatus::EnterVBlank;
                 return;
             }
 
@@ -360,7 +377,9 @@ impl Ppu {
     }
 
     pub fn set_lcdc(&mut self, lcdc: u8) {
+        println!("lcdc set to {lcdc:#010b}");
         self.lcdc = lcdc.into();
+        dbg!(self.lcdc);
     }
 
     pub fn set_stat(&mut self, stat: u8) {

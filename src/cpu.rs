@@ -3,7 +3,7 @@ use std::{fmt::Display, time::Instant};
 
 use crate::{
     memory::{self, Mmu},
-    ppu::Ppu,
+    ppu::{Lcdc, Ppu},
 };
 
 use self::{
@@ -17,14 +17,16 @@ use self::{
 pub use self::instructions::Instruction;
 pub use self::registers::{CpuFlag, Registers};
 
+
 mod instructions;
 mod registers;
 
-const NORMAL_MHZ: f64 = 1.048576;
-const FAST_MHZ: f64 = 2.097152;
-const NORMAL_TICK_DURATION: u128 = (1000.0 / NORMAL_MHZ) as u128;
-const FAST_TICK_DURATION: u128 = (1000.0 / FAST_MHZ) as u128;
 const EXT_PREFIX: u8 = 0xCB;
+
+#[derive(Clone, Copy, Debug)]
+pub struct IoRegs {
+    pub lcdc: u8,
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum CpuEvent {
@@ -168,8 +170,6 @@ pub struct Cpu {
     pub memory: Box<Mmu>,
     pub ppu: Ppu,
     pub double_speed: bool,
-    pub tick_duration: u128,
-    pub last_tick: Instant,
     pub halted: bool,
     pub debug: bool,
     pub allow_uninit: bool,
@@ -192,8 +192,6 @@ impl Cpu {
             memory: Box::new(memory),
             ppu,
             double_speed: false,
-            tick_duration: NORMAL_TICK_DURATION,
-            last_tick: Instant::now(),
             halted: false,
             debug,
             allow_uninit,
@@ -734,6 +732,7 @@ impl Cpu {
             }
             memory::LCDC => {
                 self.ppu.set_lcdc(value);
+
             }
             memory::STAT => {
                 self.ppu.set_stat(value);
@@ -812,6 +811,12 @@ impl Cpu {
                 
                 self.regs.set_cf(value)
             },
+        }
+    }
+
+    pub fn dump_io_regs(&self) -> IoRegs {
+        IoRegs {
+            lcdc: self.memory.load(memory::LCDC).unwrap_or(0),
         }
     }
 
