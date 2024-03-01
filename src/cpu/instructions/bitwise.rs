@@ -1,4 +1,4 @@
-use crate::cpu::Cpu;
+use crate::{cpu::Cpu, CpuFlag};
 
 impl Cpu {
     /// Flips the carry flag
@@ -9,9 +9,9 @@ impl Cpu {
     /// - The `half carry` flag is reset to `0`
     /// - The `carry` flag is set to the opposite of its previous value
     pub(crate) fn ccf(&mut self) {
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(!self.regs.get_cf());
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, !self.regs.get_cf());
     }
 
     /// Sets the carry flag to 1
@@ -22,9 +22,9 @@ impl Cpu {
     /// - The `half carry` flag is reset to `0`
     /// - The `carry` flag is set to `1`
     pub(crate) fn scf(&mut self) {
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(true);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, true);
     }
 
     /// Rotates A to the right, wrapping around the `carry` flag
@@ -40,10 +40,10 @@ impl Cpu {
         self.regs.a >>= 1;
         self.regs.a |= (self.regs.get_cf() as u8) << 7;
 
-        self.regs.set_zf(false);
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(carry);
+        self.set_flag(CpuFlag::Zero, false);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, carry);
     }
 
     /// Rotates A to the left, wrapping around the `carry` flag
@@ -59,10 +59,10 @@ impl Cpu {
         self.regs.a <<= 1;
         self.regs.a |= self.regs.get_cf() as u8;
 
-        self.regs.set_zf(false);
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(carry);
+        self.set_flag(CpuFlag::Zero, false);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, carry);
     }
 
     /// Rotates A right, putting bit 0 in both the carry flag and bit 7
@@ -78,10 +78,10 @@ impl Cpu {
         self.regs.a >>= 1;
         self.regs.a |= carry << 7;
 
-        self.regs.set_zf(false);
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(carry > 0);
+        self.set_flag(CpuFlag::Zero, false);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, carry > 0);
     }
 
     /// Rotates A left, putting bit 7 in both the carry flag and bit 0
@@ -97,10 +97,10 @@ impl Cpu {
         self.regs.a <<= 1;
         self.regs.a |= carry as u8;
 
-        self.regs.set_zf(false);
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(carry);
+        self.set_flag(CpuFlag::Zero, false);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, carry);
     }
 
     /// Flips every bit of A
@@ -113,8 +113,8 @@ impl Cpu {
     pub(crate) fn cpl(&mut self) {
         self.regs.a = !self.regs.a;
 
-        self.regs.set_nf(true);
-        self.regs.set_hf(true);
+        self.set_flag(CpuFlag::Subtract, true);
+        self.set_flag(CpuFlag::HalfCarry, true);
     }
 
     /// Sets the `zero` flag to whether the selected bit is `0`
@@ -129,9 +129,9 @@ impl Cpu {
             panic!("[BIT] Bit target `{idx}` out of range");
         }
 
-        self.regs.set_zf((byte & (1 << idx)) == 0);
-        self.regs.set_nf(false);
-        self.regs.set_hf(true);
+        self.set_flag(CpuFlag::Zero, (byte & (1 << idx)) == 0);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, true);
     }
 
     /// Resets the selected bit to `0`
@@ -163,10 +163,10 @@ impl Cpu {
         let carry = value & 1 > 0;
         let out = value >> 1;
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(carry);
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, carry);
 
         out
     }
@@ -182,10 +182,10 @@ impl Cpu {
         let carry = value & 1;
         let out = (value >> 1) | ((self.regs.get_cf() as u8) << 7);
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(carry > 0);
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, carry > 0);
 
         out
     }
@@ -201,10 +201,10 @@ impl Cpu {
         let carry = value & 1 << 7;
         let out = (value << 1) | (self.regs.get_cf() as u8);
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(carry > 0);
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, carry > 0);
 
         out
     }
@@ -221,10 +221,10 @@ impl Cpu {
 
         let out = (value >> 1) | (carry << 7);
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(carry > 0);
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, carry > 0);
 
         out
     }
@@ -241,10 +241,10 @@ impl Cpu {
 
         let out = (value << 1) | (carry as u8);
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(carry);
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, carry);
 
         out
     }
@@ -262,10 +262,10 @@ impl Cpu {
 
         let out = (value >> 1) | old7;
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(carry);
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, carry);
 
         out
     }
@@ -282,10 +282,10 @@ impl Cpu {
 
         let out = value << 1;
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(carry);
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, carry);
 
         out
     }
@@ -300,10 +300,10 @@ impl Cpu {
     pub(crate) fn swap(&mut self, value: u8) -> u8 {
         let out = ((value & 0xF0) >> 4) | ((value & 0x0F) << 4);
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(false);
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, false);
 
         out
     }

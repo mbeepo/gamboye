@@ -1,20 +1,21 @@
 use core::fmt;
-use std::{
-    error::Error, thread, time::{Duration, Instant}
-};
+use std::{fmt::Display, time::Instant};
 
 use crate::{
     memory::{self, Mmu},
-    ppu::Ppu, PpuStatus,
+    ppu::Ppu,
 };
 
 use self::{
     instructions::{
-        ArithmeticTarget, ByteSource, ByteTarget, Instruction, LoadType, StackTarget,
+        ArithmeticTarget, StackTarget,
         WordArithmeticTarget,
     },
-    registers::Registers,
+    registers::CpuReg,
 };
+
+pub use self::instructions::Instruction;
+pub use self::registers::{CpuFlag, Registers};
 
 mod instructions;
 mod registers;
@@ -25,8 +26,8 @@ const NORMAL_TICK_DURATION: u128 = (1000.0 / NORMAL_MHZ) as u128;
 const FAST_TICK_DURATION: u128 = (1000.0 / FAST_MHZ) as u128;
 const EXT_PREFIX: u8 = 0xCB;
 
-#[derive(Clone, Copy)]
-pub enum Breakpoint {
+#[derive(Clone, Copy, Debug)]
+pub enum CpuEvent {
     OpCode(u8),
     PrefixCode(u8),
     Instruction(Instruction),
@@ -34,25 +35,30 @@ pub enum Breakpoint {
     MemoryRead(u16),
     MemoryWrite(u16),
     Interrupt(u8),
+    Flag(CpuFlag),
+    Reg(CpuReg),
 }
 
-impl PartialEq for Breakpoint {
+impl PartialEq for CpuEvent {
     fn eq(&self, other: &Self) -> bool {
-        use Breakpoint::*;
+        use CpuEvent::*;
         match (self, other) {
             (OpCode(lhs), OpCode(rhs))
             | (PrefixCode(lhs), PrefixCode(rhs)) => {
                 lhs == rhs
-            }
+            },
             (Instruction(lhs), Instruction(rhs)) => {
                 lhs == rhs
-            }
+            },
             (Pc(lhs), Pc(rhs))
             | (MemoryRead(lhs), MemoryRead(rhs))
             | (MemoryWrite(lhs), MemoryWrite(rhs)) => {
                 lhs == rhs
-            }
+            },
             (Interrupt(lhs), Interrupt(rhs)) => {
+                lhs == rhs
+            },
+            (Flag(lhs), Flag(rhs)) => {
                 lhs == rhs
             }
             (_, _) => false
@@ -68,6 +74,8 @@ pub struct EnabledBreakpoints {
     pub memory_read: bool,
     pub memory_write: bool,
     pub interrupt: bool,
+    pub flag_change: bool,
+    pub reg_change: bool,
 }
 
 impl EnabledBreakpoints {
@@ -80,11 +88,13 @@ impl EnabledBreakpoints {
             memory_read: true,
             memory_write: true,
             interrupt: true,
+            flag_change: true,
+            reg_change: true,
         }
     }
     
-    fn is_enabled(&self, value: Breakpoint) -> bool {
-        use Breakpoint::*;
+    fn is_enabled(&self, value: CpuEvent) -> bool {
+        use CpuEvent::*;
         match value {
             OpCode(_) => self.opcode,
             PrefixCode(_) => self.prefix_code,
@@ -93,12 +103,14 @@ impl EnabledBreakpoints {
             MemoryRead(_) => self.memory_read,
             MemoryWrite(_) => self.memory_write,
             Interrupt(_) => self.interrupt,
+            Flag(_) => self.flag_change,
+            Reg(_) => self.reg_change,
         }
     }
 }
 
 pub struct Breakpoints {
-    pub breakpoints: Vec<Breakpoint>,
+    pub breakpoints: Vec<CpuEvent>,
     pub enabled_kinds: EnabledBreakpoints,
     pub master_enable: bool,
 }
@@ -114,7 +126,7 @@ impl Breakpoints {
     
     /// This is used to check if an internal event matches any active breakpoints
     /// If it does match, the breakpoint is passed back out to be forwarded to the frontend
-    fn check(&self, value: Breakpoint) -> Option<Breakpoint> {
+    fn check(&self, value: CpuEvent) -> Option<CpuEvent> {
         if !self.master_enable || !self.enabled_kinds.is_enabled(value) {
             None
         } else {
@@ -125,13 +137,30 @@ impl Breakpoints {
             }
         }
     }
+
+    pub fn set(&mut self, breakpoint: CpuEvent) {
+        self.breakpoints.push(breakpoint);
+    }
+
+    pub fn unset(&mut self, breakpoint: CpuEvent) {
+        self.breakpoints = self.breakpoints.iter().filter_map(
+            |&b| {
+                if b != breakpoint {
+                    Some(b)
+                } else {
+                    None
+                }
+            }
+        ).collect();
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum CpuStatus {
-    Run,
-    Break,
+    Run(Instruction),
+    Break(CpuEvent),
     Stop,
+    Halt,
 }
 
 pub struct Cpu {
@@ -153,7 +182,7 @@ pub struct Cpu {
     tick: usize,
     /// Breakpoints are put here during execution
     /// When the instruction is finished, the system goes through this list and checks if any breakpoints were hit
-    pending_breakpoints: Vec<Breakpoint>,
+    pending_breakpoints: Vec<CpuEvent>,
 }
 
 impl Cpu {
@@ -176,17 +205,6 @@ impl Cpu {
             stop: false,
             tick: 0,
             pending_breakpoints: Vec::new(),
-        }
-    }
-
-    pub(crate) fn main_loop(&mut self) {
-        loop {
-            if self.last_tick.elapsed().as_nanos() >= self.tick_duration {
-                self.last_tick = Instant::now();
-
-                // Err means there was an attempt to read from uninitialized memory
-                if let Err(_) = self.step() {}
-            }
         }
     }
 
@@ -260,9 +278,7 @@ impl Cpu {
     /// - `Ok(false)` if STOP was called and execution should stop
     /// - `Err(addr)` if there was an attempt to read from uninitialized memory
     pub(crate) fn step(&mut self) -> Result<CpuStatus, CpuError> {
-        if self.debug {
-            println!("Loading instruction")
-        }
+        self.dbg("Loading instruction\n");
 
         if self.halted {
             let Some(ie) = self
@@ -282,7 +298,7 @@ impl Cpu {
             }
 
             self.tick();
-            return Ok(CpuStatus::Run);
+            return Ok(CpuStatus::Halt);
         }
 
         let instruction_byte = self.mem_load(self.regs.pc)?;
@@ -292,21 +308,28 @@ impl Cpu {
             (instruction_byte, false)
         };
 
-        let next_pc = if let Some(instruction) = Instruction::from_byte(prefixed, instruction_byte)
-        {
-            self.execute(instruction)?
+        if prefixed {
+            self.push_event(CpuEvent::PrefixCode(instruction_byte));
         } else {
+            self.push_event(CpuEvent::OpCode(instruction_byte));
+        }
+
+        let Some(instruction) = Instruction::from_byte(prefixed, instruction_byte) else {
             panic!(
                 "Undefined opcode at {:#06X} ({instruction_byte:#04X})",
                 self.regs.pc
             );
         };
 
+        self.push_event(CpuEvent::Instruction(instruction));
+        let next_pc = self.execute(instruction)?;
+
         if self.stop {
             return Ok(CpuStatus::Stop);
         }
 
         self.regs.pc = next_pc;
+        self.push_event(CpuEvent::Pc(self.regs.pc));
 
         // the effects of ei are delayed by one instruction
         if self.ei_called == 1 {
@@ -317,7 +340,15 @@ impl Cpu {
         }
 
         self.handle_interrupts();
-        Ok(CpuStatus::Run)
+
+        let breakpoints = self.pending_breakpoints.clone();
+        self.pending_breakpoints = Vec::with_capacity(8);
+
+        if let Some(breakpoint) = breakpoints.iter().find_map(|&b| self.breakpoint_controls.check(b)) {
+            Ok(CpuStatus::Break(breakpoint))
+        } else {
+            Ok(CpuStatus::Run(instruction))
+        }
     }
 
     // TODO: clean this up (enum probably)
@@ -344,6 +375,9 @@ impl Cpu {
 
             for i in 0..5 {
                 if same[i] {
+                    // TODO: Push interrupt events when i make this use an enum
+                    // self.push_event(CpuEvent::Interrupt(i));
+
                     // acknowledge the interrupt and prevent further interrupts
                     self.mem_set(memory::IF, if_reg - (1 << i));
                     self.regs.ime = false;
@@ -367,13 +401,10 @@ impl Cpu {
 
     /// Executes a single instruction
     pub(crate) fn execute(&mut self, instruction: Instruction) -> Result<u16, CpuError> {
-        if self.debug {
-            println!("\nExecuting instruction");
-            dbg!(instruction);
-            println!("{}", self.regs);
-        }
+        self.dbg(format!("\nExecuting instruction\n{:?}\n{}\n", instruction, self.regs));
 
         let mut size = 1;
+        let old_regs = self.regs;
 
         match instruction {
             Instruction::ADD(target)
@@ -427,7 +458,7 @@ impl Cpu {
                         self.load_d8()?
                     }
                 };
-
+                
                 self.sub(value);
             }
             Instruction::INC(target)
@@ -626,7 +657,36 @@ impl Cpu {
             _ => {}
         }
 
+        self.diff_regs(old_regs);
+
         Ok(self.regs.pc.wrapping_add(size))
+    }
+
+    /// Push events for any changed registers
+    fn diff_regs(&mut self, old_regs: Registers) {
+        if self.regs.a != old_regs.a {
+            self.push_event(CpuEvent::Reg(CpuReg::A));
+        }
+
+        if self.regs.b != old_regs.b {
+            self.push_event(CpuEvent::Reg(CpuReg::B));
+        }
+
+        if self.regs.c != old_regs.c {
+            self.push_event(CpuEvent::Reg(CpuReg::C));
+        }
+
+        if self.regs.d != old_regs.d {
+            self.push_event(CpuEvent::Reg(CpuReg::D));
+        }
+
+        if self.regs.h != old_regs.h {
+            self.push_event(CpuEvent::Reg(CpuReg::H));
+        }
+
+        if self.regs.l != old_regs.l {
+            self.push_event(CpuEvent::Reg(CpuReg::L));
+        }
     }
 
     /// Loads a byte from memory and ticks an M-cycle
@@ -635,37 +695,35 @@ impl Cpu {
     /// - `Ok(value)` if a byte was read successfully
     /// - `Err(addr)` if the byte at the address was uninitialized, and `Self::allow_uninit` is false
     fn mem_load(&mut self, addr: u16) -> Result<u8, CpuError> {
-        if self.debug {
-            print!("[LOAD] {addr:#06X}");
-        }
-
+        self.dbg(format!("[LOAD] {:#06X}", addr));
+        self.push_event(CpuEvent::MemoryRead(addr));
         self.tick();
 
-        if let Some(out) = self.memory.load(addr) {
-            if self.debug {
-                println!(" -> {out:#04X}");
-            }
-
-            Ok(out)
-        } else {
-            if self.allow_uninit {
-                Ok(0)
-            } else {
-                if self.debug {
-                    println!();
+        match addr {
+            memory::LY => Ok(self.ppu.coords.y),
+            _ => {
+                if let Some(out) = self.memory.load(addr) {
+                    self.dbg(" -> {out:#04X}\n");
+        
+                    Ok(out)
+                } else {
+                    if self.allow_uninit {
+                        Ok(0)
+                    } else {
+                        self.dbg("\n");
+        
+                        Err(CpuError::MemoryLoadFail(addr))
+                    }
                 }
-
-                Err(CpuError::MemoryLoadFail(addr))
             }
         }
+
     }
 
     /// Sets a byte in memory and ticks an M-cycle
     fn mem_set(&mut self, addr: u16, value: u8) {
-        if self.debug {
-            println!("[SET] {addr:#06X} <- {value:#04X}");
-        }
-
+        self.dbg("[SET] {addr:#06X} <- {value:#04X}");
+        self.push_event(CpuEvent::MemoryWrite(addr));
         self.tick();
 
         match addr {
@@ -722,6 +780,53 @@ impl Cpu {
 
     fn load_s8(&mut self) -> Result<i8, CpuError> {
         Ok(self.load_d8()? as i8)
+    }
+
+    fn set_flag(&mut self, flag: CpuFlag, value: bool) {
+        match flag {
+            CpuFlag::Zero => {
+                if value != self.regs.get_zf() {
+                    self.push_event(CpuEvent::Flag(CpuFlag::Zero));
+                }
+
+                self.regs.set_zf(value)
+            },
+            CpuFlag::Subtract => {
+                if value != self.regs.get_nf() {
+                    self.push_event(CpuEvent::Flag(CpuFlag::Subtract));
+                }
+
+                self.regs.set_nf(value)
+            },
+            CpuFlag::HalfCarry => {
+                if value != self.regs.get_hf() {
+                    self.push_event(CpuEvent::Flag(CpuFlag::HalfCarry));
+                }
+                
+                self.regs.set_hf(value)
+            },
+            CpuFlag::Carry => {
+                if value != self.regs.get_cf() {
+                    self.push_event(CpuEvent::Flag(CpuFlag::Carry));
+                }
+                
+                self.regs.set_cf(value)
+            },
+        }
+    }
+
+    fn dbg(&self, out: impl Display) {
+        if self.debug {
+            print!("{}", out);
+        }
+    }
+
+    fn push_event(&mut self, event: CpuEvent) {
+        self.dbg("Event pushed\n");
+
+        if self.breakpoint_controls.master_enable && self.breakpoint_controls.enabled_kinds.is_enabled(event) {
+            self.pending_breakpoints.push(event);
+        }
     }
 }
 

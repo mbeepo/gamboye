@@ -160,12 +160,7 @@ impl Mmu {
                 Some(nibble | nibble >> 4)
             }
             MmuAddr::Io(a) => {
-                // temporary, for compatibility with gameboy doctor
-                if addr == LY {
-                    Some(0x90)
-                } else {
-                    self.io[a as usize]
-                }
+                self.io[a as usize]
             }
             MmuAddr::Hram(a) => self.hram[a as usize],
             MmuAddr::Ie => Some(self.ie),

@@ -1,4 +1,4 @@
-use crate::cpu::Cpu;
+use crate::{cpu::Cpu, CpuFlag};
 
 /// CPU instructions in the Arithmetic Group. These implementations set all relevant flags
 impl Cpu {
@@ -13,10 +13,10 @@ impl Cpu {
     pub fn add(&mut self, value: u8) -> u8 {
         let (out, carry) = self.regs.a.overflowing_add(value);
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(false);
-        self.regs.set_hf((self.regs.a & 0xF) + (value & 0xF) > 0x0F);
-        self.regs.set_cf(carry);
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, (self.regs.a & 0xF) + (value & 0xF) > 0x0F);
+        self.set_flag(CpuFlag::Carry, carry);
 
         out
     }
@@ -37,11 +37,10 @@ impl Cpu {
         let (out, c_out) = self.regs.a.overflowing_add(value);
         let (out, c_out2) = out.overflowing_add(carry);
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(false);
-        self.regs
-            .set_hf((self.regs.a & 0x0F) + (value & 0x0F) + carry > 0x0F);
-        self.regs.set_cf(c_out | c_out2);
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, (self.regs.a & 0x0F) + (value & 0x0F) + carry > 0x0F);
+        self.set_flag(CpuFlag::Carry, c_out | c_out2);
 
         out
     }
@@ -56,11 +55,10 @@ impl Cpu {
     pub fn sub(&mut self, value: u8) -> u8 {
         let (out, carry) = self.regs.a.overflowing_sub(value);
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(true);
-        self.regs
-            .set_hf((self.regs.a & 0x0F).wrapping_sub(value & 0x0F) > 0x0F);
-        self.regs.set_cf(carry);
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, true);
+        self.set_flag(CpuFlag::HalfCarry, (self.regs.a & 0x0F).wrapping_sub(value & 0x0F) > 0x0F);
+        self.set_flag(CpuFlag::Carry, carry);
 
         out
     }
@@ -81,15 +79,15 @@ impl Cpu {
         let (out, c_out) = self.regs.a.overflowing_sub(value);
         let (out, c_out2) = out.overflowing_sub(carry);
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(true);
-        self.regs.set_hf(
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, true);
+        self.set_flag(CpuFlag::HalfCarry, 
             (self.regs.a & 0x0F)
                 .wrapping_sub(value & 0x0F)
                 .wrapping_sub(carry)
                 > 0x0F,
         );
-        self.regs.set_cf(c_out | c_out2);
+        self.set_flag(CpuFlag::Carry, c_out | c_out2);
 
         out
     }
@@ -104,10 +102,10 @@ impl Cpu {
     pub fn and(&mut self, value: u8) -> u8 {
         let out = self.regs.a & value;
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(false);
-        self.regs.set_hf(true);
-        self.regs.set_cf(false);
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, true);
+        self.set_flag(CpuFlag::Carry, false);
 
         out
     }
@@ -122,10 +120,10 @@ impl Cpu {
     pub fn or(&mut self, value: u8) -> u8 {
         let out = self.regs.a | value;
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(false);
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, false);
 
         out
     }
@@ -140,10 +138,10 @@ impl Cpu {
     pub fn xor(&mut self, value: u8) -> u8 {
         let out = self.regs.a ^ value;
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(false);
-        self.regs.set_hf(false);
-        self.regs.set_cf(false);
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, false);
+        self.set_flag(CpuFlag::Carry, false);
 
         out
     }
@@ -158,9 +156,9 @@ impl Cpu {
     pub fn inc(&mut self, value: u8) -> u8 {
         let (out, carry) = value.overflowing_add(1);
 
-        self.regs.set_zf(carry);
-        self.regs.set_nf(false);
-        self.regs.set_hf((value & 0xF) + 1 > 0x0F);
+        self.set_flag(CpuFlag::Zero, carry);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, (value & 0xF) + 1 > 0x0F);
 
         out
     }
@@ -175,9 +173,9 @@ impl Cpu {
     pub fn dec(&mut self, value: u8) -> u8 {
         let out = value.wrapping_sub(1);
 
-        self.regs.set_zf(out == 0);
-        self.regs.set_nf(true);
-        self.regs.set_hf((value & 0x0F).wrapping_sub(1) > 0x0F);
+        self.set_flag(CpuFlag::Zero, out == 0);
+        self.set_flag(CpuFlag::Subtract, true);
+        self.set_flag(CpuFlag::HalfCarry, (value & 0x0F).wrapping_sub(1) > 0x0F);
 
         out
     }
@@ -199,7 +197,7 @@ impl Cpu {
             // previous instruction was not a subtraction
             if self.regs.get_cf() || a > 0x99 {
                 a = a.wrapping_add(0x60);
-                self.regs.set_cf(true);
+                self.set_flag(CpuFlag::Carry, true);
             }
 
             if self.regs.get_hf() || a & 0x0F > 0x09 {
@@ -216,8 +214,8 @@ impl Cpu {
             }
         }
 
-        self.regs.set_zf(a == 0);
-        self.regs.set_hf(false);
+        self.set_flag(CpuFlag::Zero, a == 0);
+        self.set_flag(CpuFlag::HalfCarry, false);
         a
     }
 
@@ -234,11 +232,10 @@ impl Cpu {
         let (out, overflowed) = hl.overflowing_add(value);
         self.tick();
 
-        self.regs.set_nf(false);
-        self.regs
-            .set_hf((self.regs.get_hl() & 0x0FFF) + (value & 0x0FFF) > 0x0FFF);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, (self.regs.get_hl() & 0x0FFF) + (value & 0x0FFF) > 0x0FFF);
 
-        self.regs.set_cf(overflowed);
+        self.set_flag(CpuFlag::Carry, overflowed);
 
         out
     }
@@ -257,12 +254,10 @@ impl Cpu {
         self.tick();
         self.tick();
 
-        self.regs.set_zf(false);
-        self.regs.set_nf(false);
-        self.regs
-            .set_hf(((self.regs.sp as u8 & 0x0F) + ((value) as u8 & 0x0F)) > 0x0F);
-        self.regs
-            .set_cf((self.regs.sp & 0xFF) + (value as u16 & 0xFF) & 0x0100 > 0);
+        self.set_flag(CpuFlag::Zero, false);
+        self.set_flag(CpuFlag::Subtract, false);
+        self.set_flag(CpuFlag::HalfCarry, ((self.regs.sp as u8 & 0x0F) + ((value) as u8 & 0x0F)) > 0x0F);
+        self.set_flag(CpuFlag::Carry, (self.regs.sp & 0xFF) + (value as u16 & 0xFF) & 0x0100 > 0);
 
         out
     }

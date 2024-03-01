@@ -3,7 +3,12 @@ use std::ops::Index;
 use crate::{memory::{OAM, OAM_END, SCX, SCY}, Mmu};
 
 // darkening shades of grey
-const PALETTE: [u32; 4] = [0xFFFFFFFF, 0xAAAAAAFF, 0x555555FF, 0x000000FF];
+const PALETTE: [Color; 4] = [
+    Color::from_u32(0xFFFFFFFF),
+    Color::from_u32(0xAAAAAAFF),
+    Color::from_u32(0x555555FF),
+    Color::from_u32(0x000000FF),
+];
 
 // screen and sprite dimensions
 const WIDTH: u8 = 160;
@@ -28,11 +33,46 @@ const SIGNED_BASE: u16 = 0x9000;
 
 // VRAM parameters for debug window
 const VRAM_LENGTH: u16 = 0x800 * 3;
-const VRAM_WIDTH_IN_TILES: usize = 24;
+
+#[derive(Clone, Copy, Debug)]
+pub struct Lcdc {
+    pub lcd_enable: bool,
+    pub window_map_area: u16,
+    pub window_enable: bool,
+    pub bg_addressing: AddressType,
+    pub bg_map_area: u16,
+    pub obj_size: u8,
+    pub obj_enable: bool,
+    pub bg_enable: bool,
+}
+
+impl From<u8> for Lcdc {
+    fn from(value: u8) -> Self {
+        let lcd_enable = (value & 0b1000_0000) > 0;
+        let window_map_area = if (value & 0b0100_0000) > 0 { 0x9c00 } else { 0x9800 };
+        let window_enable = (value & 0b0010_0000) > 0;
+        let bg_addressing = if (value & 0b0001_0000) > 0 { AddressType::Signed } else { AddressType::Unsigned };
+        let bg_map_area = if (value & 0b0000_1000) > 0 { 0x9c00 } else { 0x9800 };
+        let obj_size = if (value & 0b0000_0100) > 0 { 16 } else { 8 };
+        let obj_enable = (value & 0b0000_0010) > 0;
+        let bg_enable = (value & 0b0000_0001) > 0;
+
+        Self {
+            lcd_enable,
+            window_map_area,
+            window_enable,
+            bg_addressing,
+            bg_map_area,
+            obj_size,
+            obj_enable,
+            bg_enable,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Ppu {
-    pub lcdc: u8,
+    pub lcdc: Lcdc,
     pub stat: u8,
     pub coords: PpuCoords,
     pub palette: Palette,
@@ -49,20 +89,21 @@ pub struct Object {
     attributes: u8,
 }
 
-enum AddressType {
+#[derive(Clone, Copy, Debug)]
+pub enum AddressType {
     Unsigned,
     Signed,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct PpuCoords {
-    x: u8,
-    y: u8,
+    pub x: u8,
+    pub y: u8,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct Palette {
-    colors: [u32; 4],
+    colors: [Color; 4],
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -82,8 +123,8 @@ impl Palette {
         self.colors = Self::from_bgp(bgp);
     }
 
-    fn from_bgp(bgp: u8) -> [u32; 4] {
-        let color0 = bgp & 0b11;
+    fn from_bgp(bgp: u8) -> [Color; 4] {
+        let color0 =  bgp       & 0b11;
         let color1 = (bgp >> 2) & 0b11;
         let color2 = (bgp >> 4) & 0b11;
         let color3 = (bgp >> 6) & 0b11;
@@ -98,16 +139,32 @@ impl Palette {
 }
 
 impl Index<u8> for Palette {
-    type Output = u32;
+    type Output = Color;
 
     fn index(&self, index: u8) -> &Self::Output {
         &self.colors[index as usize]
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct Color {
+    inner: u32,
+    transparent: bool,
+}
+
+impl Color {
+    const fn from_u32(inner: u32) -> Self {
+        Self { inner, transparent: false }
+    }
+
+    fn to_be_bytes(self) -> [u8; 4] {
+        self.inner.to_be_bytes()
+    }
+}
+
 impl Ppu {
     pub fn new() -> Self {
-        let lcdc = 0;
+        let lcdc = 0x91.into();
         let stat = 0;
         let coords = PpuCoords { x: 0, y: 0 };
         let palette = Palette::new();
@@ -133,17 +190,25 @@ impl Ppu {
     /// - Window
     /// - Sprites
     pub fn tick(&mut self, memory: &Mmu) {
-        let address_type = if self.lcdc & (1 << 4) > 0 {
-            AddressType::Unsigned
-        } else {
-            AddressType::Signed
-        };
+        match self.status {
+            PpuStatus::VBlank => {
+                self.coords.x += 1;
 
-        let bg_map_area: u16 = if self.lcdc & (1 << 3) > 0 {
-            0x9C00
-        } else {
-            0x9800
-        };
+                if self.coords.x == WIDTH {
+                    let overflowed = self.coords.y.overflowing_add(1).1;
+
+                    if overflowed {
+                        self.status = PpuStatus::Drawing;
+                    }
+                }
+
+                return;
+            },
+            _ => {}
+        }
+
+        let address_type = self.lcdc.bg_addressing;
+        let bg_map_area: u16 = self.lcdc.bg_map_area;
 
         let scy = memory.load(SCY).unwrap_or(0);
 
@@ -152,29 +217,87 @@ impl Ppu {
         let tilemap_offset = tile_x as usize + tile_y as usize * WIDTH_IN_TILES as usize;
         let tilemap_addr = bg_map_area + tilemap_offset as u16;
 
-        // the byte in the tilemap points to the offset of the tile data
-        let tile_data_offset = memory.load(tilemap_addr).unwrap_or(0);
+        // the byte in the tilemap points to the tile index
+        let tile_index = memory.load(tilemap_addr).unwrap_or(0);
 
         // get the y offset within the tile
         let tile_y_offset = (self.coords.y.wrapping_add(scy)) % TILE_HEIGHT;
+        let bg_data_addr = address_type.convert_offset(
+            (tile_index as u16 * TILE_BYTES as u16) + (tile_y_offset as u16 * ROW_SIZE as u16),
+        );
 
-        // calculate the start address of the tile data for the current line
-        // TODO: Fix this mess
-        let tile_data_addr = if let Some(Some(object)) = self.objects.iter().find(
-            |object|
-                object.is_some() && (self.coords.x + 8).overflowing_sub(object.unwrap().x).0 < 8)
-        {
-            let out = (UNSIGNED_BASE + object.index as u16 * TILE_BYTES as u16) + (tile_y_offset as u16 * ROW_SIZE as u16);
-            out
+        // get the object to draw, if any
+        let obj = self.objects.iter().find(
+            |obj| obj.map(|obj| (self.coords.x + 8).overflowing_sub(obj.x).0 < 8).unwrap_or(false)
+        ).map(|obj| *obj).flatten();
+
+        // get the current line of the bg tile data
+        // 2 bytes per sprite row, combined into 8 2-bit palette indexes
+        let bg_tile_line = memory.load_block(bg_data_addr, bg_data_addr + 1);
+
+        let color = if let Some(obj) = obj {
+            let obj_y_offset = (self.coords.y.wrapping_add(scy)) % self.lcdc.obj_size;
+            // get the address of the current object line
+            let obj_data_addr = (UNSIGNED_BASE + obj.index as u16 * TILE_BYTES as u16) + (obj_y_offset as u16 * ROW_SIZE as u16);
+            
+            //get the current line of the object tile data
+            let obj_tile_line = memory.load_block(obj_data_addr, obj_data_addr + 1);
+            if !self.lcdc.obj_enable {
+                self.decode_color(&bg_tile_line)
+            } else {
+                let color = self.decode_color(&obj_tile_line);
+
+                // color 0 is transparent for objects, so we should fall back to the background
+                if color.transparent {
+                    self.decode_color(&bg_tile_line)
+                } else {
+                    color
+                }
+            }
         } else {
-            address_type.convert_offset(
-                (tile_data_offset as u16 * TILE_BYTES as u16) + (tile_y_offset as u16 * ROW_SIZE as u16),
-            )
+            self.decode_color(&bg_tile_line)
         };
 
-        // get the current line of the tile data
-        // 2 bytes per sprite row, combined into 8 2-bit values
-        let tiles = memory.load_block(tile_data_addr, tile_data_addr + 1);
+        let index = self.coords.x as usize + self.coords.y as usize * WIDTH as usize;
+        self.fb[index*3..index*3+3].copy_from_slice(&color.to_be_bytes()[0..3]);
+        self.coords.x += 1;
+
+        self.status = PpuStatus::Drawing;
+
+        if self.coords.x == WIDTH {
+            self.coords.x = 0;
+            self.coords.y += 1;
+
+            if self.coords.y >= HEIGHT {
+                self.status = PpuStatus::VBlank;
+                return;
+            }
+
+            // find objects on this line
+            // TODO: Update for 8x16
+            self.objects = Default::default();
+            let objects = memory.load_block(OAM, OAM_END);
+            let mut obj_index = 0;
+
+            for index in 0..objects.len() / 4 {
+                let obj_bytes = &objects[index*4..index*4+4];
+                let obj: Object = obj_bytes.into();
+
+                if (self.coords.y + 16).overflowing_sub(obj.y).0 < 8 {
+                    self.objects[obj_index] = Some(obj);
+                    obj_index += 1;
+
+                    if obj_index == 10 { break; }
+                }
+            }
+        }
+    }
+
+    /// Get the color value for the current pixel given a tile row
+    pub fn decode_color(&self, tile_row: &[u8]) -> Color {
+        if !self.lcdc.bg_enable {
+            return Color::from_u32(0xFFFFFFFF);
+        }
 
         // horizontal offset of the bit within the sprite
         // we're just rendering one pixel here
@@ -184,56 +307,17 @@ impl Ppu {
         // extract relevant bits
         // we shift the color bytes first so it's less messy to get 0 or 1
         // first byte in memory has its bits after the second byte, probably cause little endian
-        let low = (tiles[0] >> x_offset) & 1;
-        let high = (tiles[1] >> x_offset) & 1;
+        let low = (tile_row[0] >> x_offset) & 1;
+        let high = (tile_row[1] >> x_offset) & 1;
 
         // high gets shifted up to fill in the upper bit
         let color_value = (high << 1) | low;
-        let color = self.palette[color_value];
-
-        // let pixel = Pixel { x: self.coords.x, y: self.coords.y, color };
-        // self.queue.push(pixel);
-
-        let index = self.coords.x as usize + self.coords.y as usize * WIDTH as usize;
-        self.fb[index*3..index*3+3].copy_from_slice(&color.to_be_bytes()[0..3]);
-
-        self.coords.x += 1;
-
-        self.status = PpuStatus::Drawing;
-
-        if self.coords.x == WIDTH {
-            self.coords.x = 0;
-            self.coords.y += 1;
-
-            if self.coords.y == HEIGHT {
-                self.coords.y = 0;
-                self.status = PpuStatus::VBlank;
-            }
-
-            // find objects on this line
-            // TODO: Update for 8x16
-            self.objects = Default::default();
-            let objects = memory.load_block(OAM, OAM_END);
-            let mut object_index = 0;
-
-            for index in 0..objects.len() / 4 {
-                let object_bytes = &objects[index*4..index*4+4];
-                let object: Object = object_bytes.into();
-
-                if (self.coords.y + 16).overflowing_sub(object.y).0 < 8 {
-                    self.objects[object_index] = Some(object);
-                    object_index += 1;
-
-                    if object_index == 10 { break; }
-                }
-            }
+        
+        Color {
+            inner: self.palette[color_value].inner,
+            transparent: color_value == 0,
         }
     }
-
-    /// Initializes the VRAM debug framebuffer
-    // pub fn init_debug(&mut self) {
-    //     self.debug_fb = Some([0; 4 * VRAM_DISPLAY_WIDTH * VRAM_DISPLAY_HEIGHT]);
-    // }
 
     /// Refreshes the VRAM debug window, rendering the current VRAM tile data
     pub fn debug_show(&mut self, memory: &Mmu, size: [usize; 2], fb: &mut [u8]) {
@@ -276,7 +360,7 @@ impl Ppu {
     }
 
     pub fn set_lcdc(&mut self, lcdc: u8) {
-        self.lcdc = lcdc;
+        self.lcdc = lcdc.into();
     }
 
     pub fn set_stat(&mut self, stat: u8) {

@@ -1,7 +1,25 @@
 use std::fmt::Display;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CpuFlag {
+    Zero,
+    Subtract,
+    HalfCarry,
+    Carry,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CpuReg {
+    A,
+    B,
+    C,
+    D,
+    H,
+    L,
+}
+
 /// Flag register state
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Flags {
     pub zero: bool,
     pub subtract: bool,
@@ -49,7 +67,7 @@ impl Flags {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Registers {
     pub a: u8,
     pub f: Flags,
