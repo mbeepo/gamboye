@@ -76,6 +76,7 @@ pub struct Ppu {
     pub stat: u8,
     pub coords: PpuCoords,
     pub palette: Palette,
+    pub obj_palettes: [Palette; 2],
     pub fb: Vec<u8>,
     pub objects: [Option<Object>; 10],
     pub status: PpuStatus,
@@ -86,7 +87,52 @@ pub struct Object {
     y: u8,
     x: u8,
     index: u8,
-    attributes: u8,
+    attributes: ObjectAttributes,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ObjectAttributes {
+    /// this one always tricks me when it's 0 it is able to be drawn on top of bg
+    /// and when it's 1 it's only drawn on top of bg color 0
+    pub priority: bool,
+    pub y_flip: bool,
+    pub x_flip: bool,
+    pub dmg_palette: ObpSelector,
+    // // these are for cgb only, so i'll leave them commented for now
+    // pub bank: VramBankSelector,
+    // pub cgb_palette: CgbPaletteSelector 
+}
+
+impl From<u8> for ObjectAttributes {
+    fn from(value: u8) -> Self {
+        let priority = (value & 0b1000_0000) > 0;
+        let y_flip = (value & 0b0100_0000) > 0;
+        let x_flip = (value & 0b0010_0000) > 0;
+        let dmg_palette = value.into();
+
+        Self {
+            priority,
+            y_flip,
+            x_flip,
+            dmg_palette
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ObpSelector {
+    Obp0,
+    Obp1,
+}
+
+impl From<u8> for ObpSelector {
+    fn from(value: u8) -> Self {
+        match (value & 0b00010_0000) >> 5 {
+            0 => Self::Obp0,
+            1 => Self::Obp1,
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -175,6 +221,7 @@ impl Ppu {
         let stat = 0;
         let coords = PpuCoords { x: 0, y: 0 };
         let palette = Palette::new();
+        let obj_palettes = [Palette::new(), Palette::new()];
         let fb = vec![0; 3 * WIDTH as usize * HEIGHT as usize];
         let objects = [None; 10];
         let status = PpuStatus::Drawing;
@@ -184,6 +231,7 @@ impl Ppu {
             stat,
             coords,
             palette,
+            obj_palettes,
             fb,
             objects,
             status,
@@ -389,6 +437,10 @@ impl Ppu {
     pub fn set_palette(&mut self, bgp: u8) {
         self.palette.update(bgp);
     }
+
+    pub fn set_obj_palette(&mut self, index: usize, obp: u8) {
+        self.obj_palettes[index].update(obp);
+    }
 }
 
 impl AddressType {
@@ -407,10 +459,10 @@ impl From<&[u8]> for Object {
                 y: value[0],
                 x: value[1],
                 index: value[2],
-                attributes: value[3],
+                attributes: value[3].into(),
             }
         } else {
-            Self { y: 0, x: 0, index: 0, attributes: 0 }
+            Self { y: 0, x: 0, index: 0, attributes: 0.into() }
         }
     }
 }
