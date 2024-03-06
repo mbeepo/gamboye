@@ -6,16 +6,13 @@ use crate::{
     ppu::{Lcdc, Ppu},
 };
 
-use self::{
-    instructions::{
-        ArithmeticTarget, StackTarget,
-        WordArithmeticTarget,
-    },
-    registers::CpuReg,
+use self::instructions::{
+    ArithmeticTarget, StackTarget,
+    WordArithmeticTarget,
 };
 
 pub use self::instructions::Instruction;
-pub use self::registers::{CpuFlag, Registers};
+pub use self::registers::{CpuReg, CpuFlag, Registers};
 
 
 mod instructions;
@@ -62,12 +59,16 @@ impl PartialEq for CpuEvent {
             },
             (Flag(lhs), Flag(rhs)) => {
                 lhs == rhs
-            }
-            (_, _) => false
+            },
+            (Reg(lhs), Reg(rhs)) => {
+                lhs == rhs
+            },
+            (_, _) => false,
         }
     }
 }
 
+#[derive(Debug)]
 pub struct EnabledBreakpoints {
     pub opcode: bool,
     pub prefix_code: bool,
@@ -111,6 +112,7 @@ impl EnabledBreakpoints {
     }
 }
 
+#[derive(Debug)]
 pub struct Breakpoints {
     pub breakpoints: Vec<CpuEvent>,
     pub enabled_kinds: EnabledBreakpoints,
@@ -132,6 +134,10 @@ impl Breakpoints {
         if !self.master_enable || !self.enabled_kinds.is_enabled(value) {
             None
         } else {
+            if value == CpuEvent::Reg(CpuReg::A) {
+                dbg!(&value, &self.breakpoints);
+            }
+
             if self.breakpoints.iter().any(|bp| &value == bp) {
                 Some(value)
             } else {
@@ -160,7 +166,7 @@ impl Breakpoints {
 #[derive(Clone, Copy, Debug)]
 pub enum CpuStatus {
     Run(Instruction),
-    Break(CpuEvent),
+    Break(Instruction, CpuEvent),
     Stop,
     Halt,
     BlockedByDma,
@@ -367,9 +373,9 @@ impl Cpu {
 
         let breakpoints = self.pending_breakpoints.clone();
         self.pending_breakpoints = Vec::with_capacity(8);
-
+        
         if let Some(breakpoint) = breakpoints.iter().find_map(|&b| self.breakpoint_controls.check(b)) {
-            Ok(CpuStatus::Break(breakpoint))
+            Ok(CpuStatus::Break(instruction, breakpoint))
         } else {
             Ok(CpuStatus::Run(instruction))
         }
@@ -875,7 +881,15 @@ impl Cpu {
     fn push_event(&mut self, event: CpuEvent) {
         self.dbg("Event pushed\n");
 
+        if event == CpuEvent::Reg(CpuReg::A) {
+            println!("A pushed");
+        }
+
         if self.breakpoint_controls.master_enable && self.breakpoint_controls.enabled_kinds.is_enabled(event) {
+            if event == CpuEvent::Reg(CpuReg::A) {
+                println!("A pushed successfully");
+            }
+
             self.pending_breakpoints.push(event);
         }
     }

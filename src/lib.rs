@@ -5,7 +5,7 @@ mod ppu;
 
 pub use gameboy::{Gbc, MBC_ADDR};
 pub use memory::{mbc::MbcSelector, mbc::RamSize, mbc::RomSize, Mmu};
-pub use cpu::{CpuStatus, CpuError, Instruction, CpuEvent, CpuFlag, Registers, IoRegs};
+pub use cpu::{CpuStatus, CpuError, Instruction, CpuEvent, CpuReg, CpuFlag, Registers, IoRegs};
 pub use ppu::PpuStatus;
 
 pub fn get_mbc(rom: &[u8]) -> MbcSelector {
