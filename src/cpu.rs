@@ -163,6 +163,13 @@ pub enum CpuStatus {
     Break(CpuEvent),
     Stop,
     Halt,
+    BlockedByDma,
+}
+
+pub struct Dma {
+    pub cycles_remaining: u8,
+    pub source: u16,
+    pub oam: bool,
 }
 
 pub struct Cpu {
@@ -180,6 +187,7 @@ pub struct Cpu {
     tima_overflow: bool,
     stop: bool,
     tick: usize,
+    dma: Option<Dma>,
     /// Breakpoints are put here during execution
     /// When the instruction is finished, the system goes through this list and checks if any breakpoints were hit
     pending_breakpoints: Vec<CpuEvent>,
@@ -202,6 +210,7 @@ impl Cpu {
             tima_overflow: false,
             stop: false,
             tick: 0,
+            dma: None,
             pending_breakpoints: Vec::new(),
         }
     }
@@ -224,6 +233,17 @@ impl Cpu {
 
             self.memory.set(memory::IF, if_reg);
             self.tima_overflow = false;
+        }
+
+        if let Some(ref mut dma) = self.dma {
+            dma.cycles_remaining -= 1;
+
+            if dma.cycles_remaining == 0 {
+                let transfer = &self.memory.load_block(dma.source, dma.source + 0x9F);
+                self.memory.splice(memory::OAM, transfer);
+
+                self.dma = None;
+            }
         }
 
         self.ppu.tick(&self.memory);
@@ -297,6 +317,12 @@ impl Cpu {
 
             self.tick();
             return Ok(CpuStatus::Halt);
+        }
+
+        if self.oam_dma_running() && self.regs.pc < memory::HRAM {
+            // only hram is accessible, and this is not hram >:(
+            self.tick();
+            return Ok(CpuStatus::BlockedByDma)
         }
 
         let instruction_byte = self.mem_load(self.regs.pc)?;
@@ -697,6 +723,10 @@ impl Cpu {
         self.push_event(CpuEvent::MemoryRead(addr));
         self.tick();
 
+        if self.oam_dma_running() && addr < memory::HRAM {
+            return Ok(0);
+        }
+
         match addr {
             memory::LY => Ok(self.ppu.coords.y),
             _ => {
@@ -724,6 +754,10 @@ impl Cpu {
         self.push_event(CpuEvent::MemoryWrite(addr));
         self.tick();
 
+        if self.oam_dma_running() && addr < memory::HRAM {
+            return;
+        }
+
         match addr {
             memory::DIV => {
                 self.div = 0;
@@ -732,13 +766,21 @@ impl Cpu {
             }
             memory::LCDC => {
                 self.ppu.set_lcdc(value);
-
             }
             memory::STAT => {
                 self.ppu.set_stat(value);
             }
             memory::BGP => {
                 self.ppu.set_palette(value);
+            }
+            memory::DMA => {
+                if self.dma.is_none() {
+                    self.dma = Some(Dma {
+                        cycles_remaining: 160,
+                        source: value as u16 * 0x100,
+                        oam: true,
+                    });
+                }
             }
             _ => {}
         }
@@ -812,6 +854,10 @@ impl Cpu {
                 self.regs.set_cf(value)
             },
         }
+    }
+
+    pub fn oam_dma_running(&self) -> bool {
+        self.dma.as_ref().map_or(false, |dma| dma.oam)
     }
 
     pub fn dump_io_regs(&self) -> IoRegs {

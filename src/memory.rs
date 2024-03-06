@@ -14,6 +14,8 @@ pub mod mbc;
 /// Object memory
 pub const OAM: u16 = 0xFE00;
 pub const OAM_END: u16 = 0xFE9F;
+// Joypad input
+pub const JOYP: u16 = 0xFF00;
 /// Internal timer
 pub const DIV: u16 = 0xFF04;
 /// User facing timer
@@ -34,10 +36,15 @@ pub const SCY: u16 = 0xFF42;
 pub const SCX: u16 = 0xFF43;
 /// Current scanline
 pub const LY: u16 = 0xFF44;
+/// OAM DMA source and start
+/// Writing a byte to this address copies $XX00-$XX9f into $FE00-$FE9F where XX is the byte
+pub const DMA: u16 = 0xFF46;
 /// DMG palette
 pub const BGP: u16 = 0xFF47;
 /// WRAM bank select
 pub const SVBK: u16 = 0xFF70;
+/// High RAM
+pub const HRAM: u16 = 0xFF80;
 /// Granular interrupt enable
 pub const IE: u16 = 0xFFFF;
 

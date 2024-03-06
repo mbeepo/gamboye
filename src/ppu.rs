@@ -282,9 +282,8 @@ impl Ppu {
 
         // get the y offset within the tile
         let tile_y_offset = (self.coords.y.wrapping_add(scy)) % TILE_HEIGHT;
-        let bg_data_addr = address_type.convert_offset(
-            (tile_index as u16 * TILE_BYTES as u16) + (tile_y_offset as u16 * ROW_SIZE as u16),
-        );
+        let bg_data_addr = address_type.convert_offset(tile_index);
+        let bg_data_addr = bg_data_addr + tile_y_offset as u16 * ROW_SIZE as u16;
 
         // get the object to draw, if any
         let obj = self.objects.iter().find(
@@ -444,10 +443,16 @@ impl Ppu {
 }
 
 impl AddressType {
-    fn convert_offset(&self, offset: u16) -> u16 {
+    fn convert_offset(&self, index: u8) -> u16 {
         match self {
-            AddressType::Unsigned => UNSIGNED_BASE + offset,
-            AddressType::Signed => SIGNED_BASE.wrapping_add(offset as i16 as u16),
+            AddressType::Unsigned => {
+                let offset = index as u16 * 16;
+                UNSIGNED_BASE + offset
+            },
+            AddressType::Signed => {
+                let offset = index as i8 as i16 * 16;
+                SIGNED_BASE.wrapping_add(offset as u16)
+            },
         }
     }
 }
