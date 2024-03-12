@@ -3,7 +3,7 @@ use std::{fmt::Display, time::Instant};
 
 use crate::{
     memory::{self, Mmu},
-    ppu::{Lcdc, Ppu},
+    ppu::{Lcdc, Ppu}, PpuStatus,
 };
 
 use self::instructions::{
@@ -134,10 +134,6 @@ impl Breakpoints {
         if !self.master_enable || !self.enabled_kinds.is_enabled(value) {
             None
         } else {
-            if value == CpuEvent::Reg(CpuReg::A) {
-                dbg!(&value, &self.breakpoints);
-            }
-
             if self.breakpoints.iter().any(|bp| &value == bp) {
                 Some(value)
             } else {
@@ -253,6 +249,16 @@ impl Cpu {
         }
 
         self.ppu.tick(&self.memory);
+        if self.ppu.status == PpuStatus::EnterVBlank {
+            let mut if_reg = self
+                .memory
+                .load(memory::IF)
+                .expect("Error reading IF register: Uninitialized");
+
+            if_reg |= 1 << 0;
+            self.memory.set(memory::IF, if_reg);
+        }
+
         self.tick_div();
     }
 
@@ -325,11 +331,11 @@ impl Cpu {
             return Ok(CpuStatus::Halt);
         }
 
-        if self.oam_dma_running() && self.regs.pc < memory::HRAM {
-            // only hram is accessible, and this is not hram >:(
-            self.tick();
-            return Ok(CpuStatus::BlockedByDma)
-        }
+        // if self.oam_dma_running() && self.regs.pc < memory::HRAM {
+        //     // only hram is accessible, and this is not hram >:(
+        //     self.tick();
+        //     return Ok(CpuStatus::BlockedByDma)
+        // }
 
         let instruction_byte = self.mem_load(self.regs.pc)?;
         let (instruction_byte, prefixed) = if instruction_byte == EXT_PREFIX {
@@ -729,9 +735,9 @@ impl Cpu {
         self.push_event(CpuEvent::MemoryRead(addr));
         self.tick();
 
-        if self.oam_dma_running() && addr < memory::HRAM {
-            return Ok(0);
-        }
+        // if self.oam_dma_running() && addr < memory::HRAM {
+        //     return Ok(0);
+        // }
 
         match addr {
             memory::LY => Ok(self.ppu.coords.y),
@@ -760,9 +766,9 @@ impl Cpu {
         self.push_event(CpuEvent::MemoryWrite(addr));
         self.tick();
 
-        if self.oam_dma_running() && addr < memory::HRAM {
-            return;
-        }
+        // if self.oam_dma_running() && addr < memory::HRAM {
+        //     return;
+        // }
 
         match addr {
             memory::DIV => {
@@ -879,17 +885,9 @@ impl Cpu {
     }
 
     fn push_event(&mut self, event: CpuEvent) {
-        self.dbg("Event pushed\n");
-
-        if event == CpuEvent::Reg(CpuReg::A) {
-            println!("A pushed");
-        }
+        self.dbg("Event pushed: {event:?}\n");
 
         if self.breakpoint_controls.master_enable && self.breakpoint_controls.enabled_kinds.is_enabled(event) {
-            if event == CpuEvent::Reg(CpuReg::A) {
-                println!("A pushed successfully");
-            }
-
             self.pending_breakpoints.push(event);
         }
     }

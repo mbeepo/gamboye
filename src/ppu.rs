@@ -152,7 +152,7 @@ pub struct Palette {
     colors: [Color; 4],
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PpuStatus {
     Drawing,
     EnterVBlank,
@@ -295,15 +295,15 @@ impl Ppu {
         let bg_tile_line = memory.load_block(bg_data_addr, bg_data_addr + 1);
 
         let color = if let Some(obj) = obj {
-            let obj_y_offset = (self.coords.y.wrapping_add(scy)) % self.lcdc.obj_size;
-            // get the address of the current object line
-            let obj_data_addr = (UNSIGNED_BASE + obj.index as u16 * TILE_BYTES as u16) + (obj_y_offset as u16 * ROW_SIZE as u16);
-            
-            //get the current line of the object tile data
-            let obj_tile_line = memory.load_block(obj_data_addr, obj_data_addr + 1);
             if !self.lcdc.obj_enable {
                 self.decode_color(&bg_tile_line)
             } else {
+                let obj_y_offset = (self.coords.y.wrapping_add(scy)) % self.lcdc.obj_size;
+                // get the address of the current object line
+                let obj_data_addr = (UNSIGNED_BASE + obj.index as u16 * TILE_BYTES as u16) + (obj_y_offset as u16 * ROW_SIZE as u16);
+
+                //get the current line of the object tile data
+                let obj_tile_line = memory.load_block(obj_data_addr, obj_data_addr + 1);
                 let color = self.decode_color(&obj_tile_line);
 
                 if self.coords.y < 2 {
@@ -346,7 +346,7 @@ impl Ppu {
             for index in 0..objects.len() / 4 {
                 let obj_bytes = &objects[index*4..index*4+4];
                 let obj: Object = obj_bytes.into();
-
+                
                 if (self.coords.y + 16).overflowing_sub(obj.y).0 < 8 {
                     self.objects[obj_index] = Some(obj);
                     obj_index += 1;
@@ -424,9 +424,7 @@ impl Ppu {
     }
 
     pub fn set_lcdc(&mut self, lcdc: u8) {
-        println!("lcdc set to {lcdc:#010b}");
         self.lcdc = lcdc.into();
-        dbg!(self.lcdc);
     }
 
     pub fn set_stat(&mut self, stat: u8) {
