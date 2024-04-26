@@ -17,6 +17,6 @@ pub fn get_mbc(rom: &[u8]) -> MbcSelector {
     match rom[MBC_ADDR] {
         0x00 => MbcSelector::NoMbc,
         0x01 => MbcSelector::Mbc1(rom_size, ram_size),
-        _ => panic!("Unsupported MBC"),
+        e => panic!("Unsupported MBC ({e:#04X})"),
     }
 }
