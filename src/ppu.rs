@@ -306,10 +306,10 @@ impl Ppu {
                 let obj_tile_line = memory.load_block(obj_data_addr, obj_data_addr + 1);
                 let color = self.decode_color(&obj_tile_line);
 
-                if self.coords.y < 2 {
-                    dbg!(obj);
-                    println!("{color}")
-                }
+                // if self.coords.y < 2 {
+                //     dbg!(obj);
+                //     println!("{color}")
+                // }
 
                 // color 0 is transparent for objects, so we should fall back to the background
                 if color.transparent {

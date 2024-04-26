@@ -1,7 +1,7 @@
 use crate::{
     cpu::{Cpu, CpuError, CpuStatus},
     memory::{mbc::MbcSelector, Mmu},
-    ppu::{Ppu, PpuStatus},
+    ppu::{Ppu, PpuStatus}, Button,
 };
 
 pub const MBC_ADDR: usize = 0x0147;
@@ -45,4 +45,16 @@ impl Gbc {
     //     // fb.copy_from_slice(&self.cpu.ppu.fb);
     //     fb.swap_with_slice(&mut self.cpu.ppu.fb);
     // }
+
+    pub fn press_button(&mut self, button: Button) {
+        self.set_button(button, true)
+    }
+
+    pub fn release_button(&mut self, button: Button) {
+        self.set_button(button, false)
+    }
+
+    fn set_button(&mut self, button: Button, to: bool) {
+        *self.cpu.host_input.get_mut(button) = to
+    }
 }

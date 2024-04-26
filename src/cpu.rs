@@ -1,9 +1,8 @@
 use core::fmt;
-use std::{fmt::Display, time::Instant};
+use std::{borrow::BorrowMut, collections::HashMap, fmt::Display, fs::File, io::Write, time::Instant};
 
 use crate::{
-    memory::{self, Mmu},
-    ppu::{Lcdc, Ppu}, PpuStatus,
+    input::{ButtonSelection, HostInput, Joyp}, memory::{self, Mmu}, ppu::{Lcdc, Ppu}, Button, PpuStatus
 };
 
 use self::instructions::{
@@ -23,6 +22,7 @@ const EXT_PREFIX: u8 = 0xCB;
 #[derive(Clone, Copy, Debug)]
 pub struct IoRegs {
     pub lcdc: u8,
+    pub joyp: u8,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -183,6 +183,8 @@ pub struct Cpu {
     pub debug: bool,
     pub allow_uninit: bool,
     pub breakpoint_controls: Breakpoints,
+    pub host_input: HostInput,
+    pub joyp: Joyp,
     ei_called: u8,
     div: u16,
     div_last: bool,
@@ -193,10 +195,17 @@ pub struct Cpu {
     /// Breakpoints are put here during execution
     /// When the instruction is finished, the system goes through this list and checks if any breakpoints were hit
     pending_breakpoints: Vec<CpuEvent>,
+    log: Option<File>,
 }
 
 impl Cpu {
     pub fn new(memory: Mmu, ppu: Ppu, debug: bool, allow_uninit: bool) -> Self {
+        let log = if debug {
+            Some(File::create("gb.log").unwrap())
+        } else {
+            None
+        };
+
         Self {
             regs: Registers::new(),
             memory: Box::new(memory),
@@ -206,6 +215,8 @@ impl Cpu {
             debug,
             allow_uninit,
             breakpoint_controls: Breakpoints::new(),
+            host_input: HostInput::new(),
+            joyp: Joyp::new(),
             ei_called: 0,
             div: 0,
             div_last: false,
@@ -214,6 +225,7 @@ impl Cpu {
             tick: 0,
             dma: None,
             pending_breakpoints: Vec::new(),
+            log
         }
     }
 
@@ -740,6 +752,10 @@ impl Cpu {
         // }
 
         match addr {
+            memory::JOYP => {
+                let gorp = self.joyp.serialize(self.host_input);
+                Ok(gorp)
+            }
             memory::LY => Ok(self.ppu.coords.y),
             _ => {
                 if let Some(out) = self.memory.load(addr) {
@@ -771,6 +787,10 @@ impl Cpu {
         // }
 
         match addr {
+            memory::JOYP => {
+                self.joyp.change_selection(value | 0b11001111).ok();
+                return;
+            }
             memory::DIV => {
                 self.div = 0;
                 self.memory.set(addr, 0);
@@ -787,6 +807,7 @@ impl Cpu {
             }
             memory::DMA => {
                 if self.dma.is_none() {
+                    // println!("DMA started from {:#06X} @ {:#06X}", value as u16 * 0x100, self.regs.pc);
                     self.dma = Some(Dma {
                         cycles_remaining: 160,
                         source: value as u16 * 0x100,
@@ -875,17 +896,21 @@ impl Cpu {
     pub fn dump_io_regs(&self) -> IoRegs {
         IoRegs {
             lcdc: self.memory.load(memory::LCDC).unwrap_or(0),
+            joyp: self.joyp.serialize(self.host_input),
         }
     }
 
-    fn dbg(&self, out: impl Display) {
+    fn dbg(&mut self, out: impl Display) {
         if self.debug {
-            print!("{}", out);
+            // print!("{}", out);
+            if let Some(log) = self.log.as_mut() {
+                log.write_all(format!("{}", out).as_bytes()).unwrap();
+            }
         }
     }
 
     fn push_event(&mut self, event: CpuEvent) {
-        self.dbg("Event pushed: {event:?}\n");
+        self.dbg(format!("Event pushed: {event:?}\n"));
 
         if self.breakpoint_controls.master_enable && self.breakpoint_controls.enabled_kinds.is_enabled(event) {
             self.pending_breakpoints.push(event);

@@ -191,10 +191,10 @@ impl Mmu {
             MmuAddr::Oam(a) => self.oam[a as usize] = Some(value),
             MmuAddr::Prohibited => {}
             MmuAddr::Io(a) => {
-                if addr == SVBK {
-                    // WRAM Bank Select
-                    self.wram.select(value);
-                }
+                // if addr == SVBK {
+                //     // WRAM Bank Select
+                //     self.wram.select(value);
+                // }
 
                 self.io[a as usize] = Some(value);
             }
