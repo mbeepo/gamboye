@@ -286,7 +286,7 @@ impl Ppu {
         let bg_data_addr = bg_data_addr + tile_y_offset as u16 * ROW_SIZE as u16;
 
         // get the object to draw, if any
-        let obj = self.objects.iter().find(
+        let mut obj = self.objects.iter().filter(
             |obj| obj.map(|obj| (self.coords.x + 8).overflowing_sub(obj.x).0 < 8).unwrap_or(false)
         ).map(|obj| *obj).flatten();
 
@@ -294,17 +294,21 @@ impl Ppu {
         // 2 bytes per sprite row, combined into 8 2-bit palette indexes
         let bg_tile_line = memory.load_block(bg_data_addr, bg_data_addr + 1);
 
-        let color = if let Some(obj) = obj {
+        let color = obj.find_map(|obj| {
             if !self.lcdc.obj_enable {
-                self.decode_color(&bg_tile_line)
+                Some(self.decode_bg_color(&bg_tile_line))
             } else {
-                let obj_y_offset = (self.coords.y.wrapping_add(scy)) % self.lcdc.obj_size;
+                let mut obj_y_offset = (self.coords.y + 16).wrapping_add(scy).overflowing_sub(obj.y).0;
+                if obj.attributes.y_flip {
+                    obj_y_offset = self.lcdc.obj_size - 1 - obj_y_offset;
+                }
                 // get the address of the current object line
                 let obj_data_addr = (UNSIGNED_BASE + obj.index as u16 * TILE_BYTES as u16) + (obj_y_offset as u16 * ROW_SIZE as u16);
 
                 //get the current line of the object tile data
-                let obj_tile_line = memory.load_block(obj_data_addr, obj_data_addr + 1);
-                let color = self.decode_color(&obj_tile_line);
+                let mut obj_tile_line = memory.load_block(obj_data_addr, obj_data_addr + 1);
+
+                let color = self.decode_obj_color(&obj_tile_line, obj);
 
                 // if self.coords.y < 2 {
                 //     dbg!(obj);
@@ -313,13 +317,17 @@ impl Ppu {
 
                 // color 0 is transparent for objects, so we should fall back to the background
                 if color.transparent {
-                    self.decode_color(&bg_tile_line)
+                    None
                 } else {
-                    color
+                    Some(color)
                 }
             }
+        });
+
+        let color = if let Some(color) = color {
+            color
         } else {
-            self.decode_color(&bg_tile_line)
+            self.decode_bg_color(&bg_tile_line)
         };
 
         let index = self.coords.x as usize + self.coords.y as usize * WIDTH as usize;
@@ -358,7 +366,7 @@ impl Ppu {
     }
 
     /// Get the color value for the current pixel given a tile row
-    pub fn decode_color(&self, tile_row: &[u8]) -> Color {
+    pub fn decode_bg_color(&self, tile_row: &[u8]) -> Color {
         if !self.lcdc.bg_enable {
             return Color::from_u32(0xFFFFFFFF);
         }
@@ -366,7 +374,24 @@ impl Ppu {
         // horizontal offset of the bit within the sprite
         // we're just rendering one pixel here
         // this will be more efficient when we implement the FIFO
-        let x_offset = TILE_WIDTH - 1 - self.coords.x % TILE_WIDTH;
+        let x_offset = self.coords.x % TILE_WIDTH;
+        self.decode_color(tile_row, x_offset)
+    }
+
+    pub fn decode_obj_color(&self, tile_row: &[u8], obj: Object) -> Color {
+        if !self.lcdc.obj_enable {
+            return Color::from_u32(0xFFFFFFFF);
+        }
+
+        let mut x_offset = self.coords.x - obj.x;
+        if obj.attributes.x_flip { x_offset = TILE_WIDTH - 1 - x_offset; }
+        self.decode_color(tile_row, x_offset)
+    }
+
+    /// Decodes a color from its containing bytes and a horizontal offset from the left edge
+    pub fn decode_color(&self, tile_row: &[u8], x_offset: u8) -> Color {
+        // we start from the left and shift right to bit 0
+        let x_offset = TILE_WIDTH - 1 - x_offset;
 
         // extract relevant bits
         // we shift the color bytes first so it's less messy to get 0 or 1
