@@ -10,36 +10,40 @@ const PALETTE: [Color; 4] = [
     Color::from_u32(0x000000FF),
 ];
 
-// screen and sprite dimensions
+/// Width of the display, in pixels
 const WIDTH: u8 = 160;
+/// Height of the display, in pixels
 const HEIGHT: u8 = 144;
+/// Width of a tile, in pixels
 const TILE_WIDTH: u8 = 8;
+/// Height of a single tile, in pixels
 const TILE_HEIGHT: u8 = 8;
 
-// number of bytes in a tile row
+/// Number of bytes in a tile row
 const ROW_SIZE: u8 = 2;
 
-// number of bytes in a tile
+/// Number of bytes in a tile
 const TILE_BYTES: u8 = ROW_SIZE * TILE_HEIGHT;
 
-// number of tiles that fit horizontally and vertically
+/// Number of tiles that fit horizontally and vertically
 // const WIDTH_IN_TILES: u8 = WIDTH / TILE_WIDTH;
 // const HEIGHT_IN_TILES: u8 = HEIGHT / TILE_HEIGHT;
 const WIDTH_IN_TILES: u8 = 32;
 
-// base addresses for the different tile data addressing modes
+/// Base address for unsigned bg addressing mode
 const UNSIGNED_BASE: u16 = 0x8000;
+/// Base address for signed bg addressing mode
 const SIGNED_BASE: u16 = 0x9000;
-
-// VRAM parameters for debug window
-const VRAM_LENGTH: u16 = 0x800 * 3;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Lcdc {
     pub lcd_enable: bool,
     pub window_map_area: u16,
     pub window_enable: bool,
+    /// Whether background (and window) tiles should map to tile data in $8000-$87ff (unsigned) or $8800-$97ff (signed)
     pub bg_addressing: AddressType,
+    /// The section of VRAM the background map is contained in, either $9800 or $9c00
+    // TODO: Enum
     pub bg_map_area: u16,
     pub obj_size: u8,
     pub obj_enable: bool,
@@ -193,6 +197,48 @@ impl Index<u8> for Palette {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PaletteColor {
+    Color0,
+    Color1,
+    Color2,
+    Color3,
+}
+
+impl Index<PaletteColor> for Palette {
+    type Output = Color;
+
+    fn index(&self, index: PaletteColor) -> &Self::Output {
+        use PaletteColor::*;
+
+        match index {
+            Color0 => &self[0],
+            Color1 => &self[1],
+            Color2 => &self[2],
+            Color3 => &self[3],
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum PaletteError {
+    OutOfRange,
+}
+
+impl TryFrom<u8> for PaletteColor {
+    type Error = PaletteError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Color0),
+            1 => Ok(Self::Color1),
+            2 => Ok(Self::Color2),
+            3 => Ok(Self::Color3),
+            _ => Err(PaletteError::OutOfRange),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Color {
     inner: u32,
@@ -241,9 +287,7 @@ impl Ppu {
     /// Returns status of PPU (either `Drawing` or `VBlank`)
     /// 
     /// TODO:
-    /// - BG Enable (Don't show BG if LCDC.0 is cleared)
     /// - Window
-    /// - Sprites
     pub fn tick(&mut self, memory: &Mmu) {
         match self.status {
             PpuStatus::EnterVBlank => {
@@ -363,6 +407,25 @@ impl Ppu {
                 }
             }
         }
+    }
+
+    /// Returns the palette color of the background pixel at <pos>
+    /// <pos> is a *global* position within the full 256x256 px picture
+    /// 
+    /// 1. Get the tile that contains the pixel
+    /// 2. Get the pixel within the tile
+    /// 3. Translate to PaletteColor
+    /// 
+    /// TODO: Finish this function, then use it to fix background scrolling
+    pub fn get_bg_pixel(&self, pos: PpuCoords) -> PaletteColor {
+        let address_type = self.lcdc.bg_addressing;
+        let bg_map_start: u16 = self.lcdc.bg_map_area;
+        // The byte offset of the tile row within BG tile data
+        let tilemap_offset = (pos.x / 8) + (pos.y * WIDTH_IN_TILES);
+        
+
+
+        0.try_into().unwrap()
     }
 
     /// Get the color value for the current pixel given a tile row
