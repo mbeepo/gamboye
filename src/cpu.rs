@@ -280,6 +280,8 @@ impl Cpu {
             self.ppu.stat.int = false;
         }
 
+        self.memory.set(memory::STAT, self.ppu.stat.into());
+
         self.tick_div();
     }
 

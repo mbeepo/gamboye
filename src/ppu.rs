@@ -1,6 +1,6 @@
 use std::{fmt::Display, ops::{Add, AddAssign, Index}};
 
-use crate::{memory::{OAM, OAM_END, SCX, SCY}, Mmu};
+use crate::{memory::{self, OAM, OAM_END, SCX, SCY}, Mmu};
 
 // darkening shades of grey
 const PALETTE: [Color; 4] = [
@@ -82,6 +82,18 @@ pub enum PpuMode {
     Mode3,
 }
 
+impl From<PpuMode> for u8 {
+    fn from(value: PpuMode) -> Self {
+        use PpuMode::*;
+        match value {
+            Mode0 => 0,
+            Mode1 => 1,
+            Mode2 => 2,
+            Mode3 => 3,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Stat {
     pub int_lyc: bool,
@@ -121,6 +133,24 @@ impl From<u8> for Stat {
             mode,
             int,
         }
+    }
+}
+
+impl From<Stat> for u8 {
+    fn from(value: Stat) -> Self {
+        let int_lyc = if value.int_lyc { 0b0100_0000 } else { 0 };
+        let int_mode2 = if value.int_mode2 { 0b0010_0000 } else { 0 };
+        let int_mode1 = if value.int_mode1 { 0b0001_0000 } else { 0 };
+        let int_mode0 = if value.int_mode0 { 0b0000_1000 } else { 0 };
+        let lyc_match = if value.lyc_match { 0b0000_0100 } else { 0 };
+        let mode: u8 = value.mode.into();
+
+        int_lyc
+        | int_mode2
+        | int_mode1
+        | int_mode0
+        | lyc_match
+        | mode
     }
 }
 
@@ -228,6 +258,7 @@ pub enum PpuStatus {
     Drawing,
     EnterVBlank,
     VBlank,
+    HBlank,
 }
 
 impl Palette {
@@ -361,21 +392,65 @@ impl Ppu {
                 self.coords.x += 1;
                 self.status = PpuStatus::VBlank;
                 return;
-            },
+            }
             PpuStatus::VBlank => {
-                self.coords.x += 1;
+                let (new_x, x_overflowed) = self.coords.x.overflowing_add(1);
+                self.coords.x = new_x;
 
-                if self.coords.x == WIDTH {
-                    let (new_y, overflowed) = self.coords.y.overflowing_add(1);
+                if x_overflowed {
+                    let (new_y, y_overflowed) = self.coords.y.overflowing_add(1);
                     self.coords.y = new_y;
 
-                    if overflowed {
+                    if y_overflowed {
                         self.status = PpuStatus::Drawing;
                     }
                 }
 
                 return;
-            },
+            }
+            PpuStatus::HBlank => {
+                let (new_x, x_overflowed) = self.coords.x.overflowing_add(1);
+                self.coords.x = new_x;
+
+                if x_overflowed {
+                    if self.stat.int_lyc {
+                        if let Some(lyc) = memory.load(crate::memory::LYC) {
+                            if self.coords.y == lyc {
+                                self.stat.lyc_match = true;
+                                self.stat.int = true;
+                            } else {
+                                self.stat.lyc_match = false;
+                            }
+                        }
+                    }
+        
+                    if self.coords.y >= HEIGHT {
+                        self.status = PpuStatus::EnterVBlank;
+                        self.stat.mode = PpuMode::Mode1;
+                        if self.stat.int_mode1 { self.stat.int = true; }
+        
+                        return;
+                    }
+        
+                    // find objects on this line
+                    // TODO: Update for 8x16
+                    self.objects = Default::default();
+                    let objects = memory.load_block(OAM, OAM_END);
+                    let mut obj_index = 0;
+        
+                    for index in 0..objects.len() / 4 {
+                        let obj_bytes = &objects[index*4..index*4+4];
+                        let obj: Object = obj_bytes.into();
+                        
+                        if (self.coords.y + 16).overflowing_sub(obj.y).0 < 8 {
+                            self.objects[obj_index] = Some(obj);
+                            obj_index += 1;
+        
+                            if obj_index == 10 { break; }
+                        }
+                    }
+                }
+            }
             _ => {}
         }
 
@@ -456,43 +531,10 @@ impl Ppu {
         self.status = PpuStatus::Drawing;
 
         if self.coords.x == WIDTH {
+            self.stat.mode = PpuMode::Mode0;
+            if self.stat.int_mode0 { self.stat.int = true; }
             self.coords.x = 0;
             self.coords.y += 1;
-
-
-            if self.stat.int_lyc {
-                if let Some(lyc) = memory.load(crate::memory::LYC) {
-                    if self.coords.y == lyc {
-                        self.stat.lyc_match = true;
-                        self.stat.int = true;
-                    } else {
-                        self.stat.lyc_match = false;
-                    }
-                }
-            }
-
-            if self.coords.y >= HEIGHT {
-                self.status = PpuStatus::EnterVBlank;
-                return;
-            }
-
-            // find objects on this line
-            // TODO: Update for 8x16
-            self.objects = Default::default();
-            let objects = memory.load_block(OAM, OAM_END);
-            let mut obj_index = 0;
-
-            for index in 0..objects.len() / 4 {
-                let obj_bytes = &objects[index*4..index*4+4];
-                let obj: Object = obj_bytes.into();
-                
-                if (self.coords.y + 16).overflowing_sub(obj.y).0 < 8 {
-                    self.objects[obj_index] = Some(obj);
-                    obj_index += 1;
-
-                    if obj_index == 10 { break; }
-                }
-            }
         }
     }
 
@@ -637,6 +679,10 @@ impl Ppu {
 
     pub fn set_obj_palette(&mut self, index: usize, obp: u8) {
         self.obj_palettes[index].update(obp);
+    }
+
+    fn set_stat_reg(&self, memory: &mut Mmu) {
+        memory.set(memory::STAT, self.stat.into());
     }
 }
 
