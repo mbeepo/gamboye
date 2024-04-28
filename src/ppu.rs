@@ -1,4 +1,4 @@
-use std::{fmt::Display, ops::Index};
+use std::{fmt::Display, ops::{Add, AddAssign, Index}};
 
 use crate::{memory::{OAM, OAM_END, SCX, SCY}, Mmu};
 
@@ -74,10 +74,60 @@ impl From<u8> for Lcdc {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum PpuMode {
+    Mode0,
+    Mode1,
+    Mode2,
+    Mode3,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Stat {
+    pub int_lyc: bool,
+    pub int_mode2: bool,
+    pub int_mode1: bool,
+    pub int_mode0: bool,
+    pub lyc_match: bool,
+    pub mode: PpuMode,
+    /// Used to signal up to the CPU that a STAT interrupt should be triggered
+    pub int: bool,
+}
+
+impl Stat {
+    pub fn new() -> Self {
+        let mut out: Self = 0.into();
+        out.int = false;
+        out
+    }
+}
+
+impl From<u8> for Stat {
+    fn from(value: u8) -> Self {
+        let int_lyc     = (value & 0b0100_0000) > 0;
+        let int_mode2   = (value & 0b0010_0000) > 0;
+        let int_mode1   = (value & 0b0001_0000) > 0;
+        let int_mode0   = (value & 0b0000_1000) > 0;
+        let lyc_match   = false;
+        let mode = PpuMode::Mode0;
+        let int = true;
+
+        Self {
+            int_lyc,
+            int_mode2,
+            int_mode1,
+            int_mode0,
+            lyc_match,
+            mode,
+            int,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Ppu {
     pub lcdc: Lcdc,
-    pub stat: u8,
+    pub stat: Stat,
     pub coords: PpuCoords,
     pub palette: Palette,
     pub obj_palettes: [Palette; 2],
@@ -149,6 +199,23 @@ pub enum AddressType {
 pub struct PpuCoords {
     pub x: u8,
     pub y: u8,
+}
+
+impl Add<(u8, u8)> for PpuCoords {
+    type Output = PpuCoords;
+
+    fn add(self, rhs: (u8, u8)) -> Self::Output {
+        let x = self.x + rhs.0;
+        let y = self.y + rhs.1;
+        PpuCoords { x, y }
+    }
+}
+
+impl AddAssign<(u8, u8)> for PpuCoords {
+    fn add_assign(&mut self, rhs: (u8, u8)) {
+        self.x += rhs.0;
+        self.y += rhs.1;
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -264,7 +331,7 @@ impl Display for Color {
 impl Ppu {
     pub fn new() -> Self {
         let lcdc = 0x91.into();
-        let stat = 0;
+        let stat = Stat::new();
         let coords = PpuCoords { x: 0, y: 0 };
         let palette = Palette::new();
         let obj_palettes = [Palette::new(), Palette::new()];
@@ -312,35 +379,42 @@ impl Ppu {
             _ => {}
         }
 
-        let address_type = self.lcdc.bg_addressing;
-        let bg_map_area: u16 = self.lcdc.bg_map_area;
-
+        let scx = memory.load(SCX).unwrap_or(0);
         let scy = memory.load(SCY).unwrap_or(0);
-        let tile_x = ((self.coords.x / TILE_WIDTH).wrapping_add(memory.load(SCX).unwrap_or(0) / TILE_WIDTH)) % WIDTH_IN_TILES;
-        let tile_y = (self.coords.y.wrapping_add(scy)) / TILE_HEIGHT;
-        let tilemap_offset = tile_x as usize + tile_y as usize * WIDTH_IN_TILES as usize;
-        let tilemap_addr = bg_map_area + tilemap_offset as u16;
+        if scx != 0 { dbg!(scx); }
+        let pos = self.coords + (scx, scy);
+        let bg_color = self.get_bg_pixel(memory, pos);
 
-        // the byte in the tilemap points to the tile index
-        let tile_index = memory.load(tilemap_addr).unwrap_or(0);
+        // let address_type = self.lcdc.bg_addressing;
+        // let bg_map_area: u16 = self.lcdc.bg_map_area;
 
-        // get the y offset within the tile
-        let tile_y_offset = (self.coords.y.wrapping_add(scy)) % TILE_HEIGHT;
-        let bg_data_addr = address_type.convert_offset(tile_index);
-        let bg_data_addr = bg_data_addr + tile_y_offset as u16 * ROW_SIZE as u16;
+        // let scy = memory.load(SCY).unwrap_or(0);
+        // let tile_x = ((self.coords.x / TILE_WIDTH).wrapping_add(memory.load(SCX).unwrap_or(0) / TILE_WIDTH)) % WIDTH_IN_TILES;
+        // let tile_y = (self.coords.y.wrapping_add(scy)) / TILE_HEIGHT;
+        // let tilemap_offset = tile_x as usize + tile_y as usize * WIDTH_IN_TILES as usize;
+        // let tilemap_addr = bg_map_area + tilemap_offset as u16;
+
+        // // the byte in the tilemap points to the tile index
+        // let tile_index = memory.load(tilemap_addr).unwrap_or(0);
+
+        // // get the y offset within the tile
+        // let tile_y_offset = (self.coords.y.wrapping_add(scy)) % TILE_HEIGHT;
+        // let bg_data_addr = address_type.convert_offset(tile_index);
+        // let bg_data_addr = bg_data_addr + tile_y_offset as u16 * ROW_SIZE as u16;
 
         // get the object to draw, if any
         let mut obj = self.objects.iter().filter(
             |obj| obj.map(|obj| (self.coords.x + 8).overflowing_sub(obj.x).0 < 8).unwrap_or(false)
         ).map(|obj| *obj).flatten();
 
-        // get the current line of the bg tile data
-        // 2 bytes per sprite row, combined into 8 2-bit palette indexes
-        let bg_tile_line = memory.load_block(bg_data_addr, bg_data_addr + 1);
+        // // get the current line of the bg tile data
+        // // 2 bytes per sprite row, combined into 8 2-bit palette indexes
+        // let bg_tile_line = memory.load_block(bg_data_addr, bg_data_addr + 1);
 
         let color = obj.find_map(|obj| {
             if !self.lcdc.obj_enable {
-                Some(self.decode_bg_color(&bg_tile_line))
+                // Some(self.decode_bg_color(&bg_tile_line))
+                Some(bg_color)
             } else {
                 let mut obj_y_offset = (self.coords.y + 16).wrapping_add(scy).overflowing_sub(obj.y).0;
                 if obj.attributes.y_flip {
@@ -350,7 +424,7 @@ impl Ppu {
                 let obj_data_addr = (UNSIGNED_BASE + obj.index as u16 * TILE_BYTES as u16) + (obj_y_offset as u16 * ROW_SIZE as u16);
 
                 //get the current line of the object tile data
-                let mut obj_tile_line = memory.load_block(obj_data_addr, obj_data_addr + 1);
+                let obj_tile_line = memory.load_block(obj_data_addr, obj_data_addr + 1);
 
                 let color = self.decode_obj_color(&obj_tile_line, obj);
 
@@ -371,7 +445,8 @@ impl Ppu {
         let color = if let Some(color) = color {
             color
         } else {
-            self.decode_bg_color(&bg_tile_line)
+            // self.decode_bg_color(&bg_tile_line)
+            bg_color
         };
 
         let index = self.coords.x as usize + self.coords.y as usize * WIDTH as usize;
@@ -383,6 +458,18 @@ impl Ppu {
         if self.coords.x == WIDTH {
             self.coords.x = 0;
             self.coords.y += 1;
+
+
+            if self.stat.int_lyc {
+                if let Some(lyc) = memory.load(crate::memory::LYC) {
+                    if self.coords.y == lyc {
+                        self.stat.lyc_match = true;
+                        self.stat.int = true;
+                    } else {
+                        self.stat.lyc_match = false;
+                    }
+                }
+            }
 
             if self.coords.y >= HEIGHT {
                 self.status = PpuStatus::EnterVBlank;
@@ -412,20 +499,45 @@ impl Ppu {
     /// Returns the palette color of the background pixel at <pos>
     /// <pos> is a *global* position within the full 256x256 px picture
     /// 
-    /// 1. Get the tile that contains the pixel
-    /// 2. Get the pixel within the tile
-    /// 3. Translate to PaletteColor
-    /// 
-    /// TODO: Finish this function, then use it to fix background scrolling
-    pub fn get_bg_pixel(&self, pos: PpuCoords) -> PaletteColor {
+    /// (170, 10)
+    /// address_type = unsigned
+    /// bg_map_start = $9800
+    /// tile_x = 170 / 8 % 32
+    ///        = 21 % 32
+    ///        = 21
+    /// tile_y = 10 / 8
+    ///        = 1
+    /// tilemap_offset = 21 + 1 * 32
+    ///                = 21 + 32
+    ///                = 53
+    /// tilemap_addr = $9800 + 53
+    ///                $9835
+    /// tile_index = 10
+    /// tile_y_offset = 1 % 8
+    ///               = 1
+    /// tile_data_addr = $9800 + 10
+    ///                = $980a
+    /// tile_row_addr = $980a + 1 * 2
+    ///               = $980a + 2
+    ///               = $980c
+    pub fn get_bg_pixel(&self, memory: &Mmu, pos: PpuCoords) -> Color {
         let address_type = self.lcdc.bg_addressing;
         let bg_map_start: u16 = self.lcdc.bg_map_area;
         // The byte offset of the tile row within BG tile data
-        let tilemap_offset = (pos.x / 8) + (pos.y * WIDTH_IN_TILES);
-        
+        let tile_x = pos.x / TILE_WIDTH % WIDTH_IN_TILES;
+        let tile_y = pos.y / TILE_HEIGHT;
+        let tilemap_offset = tile_x as u16 + (tile_y as u16 * WIDTH_IN_TILES as u16);
+        let tilemap_addr = bg_map_start + tilemap_offset;
+        let tile_index = memory.load(tilemap_addr).unwrap_or(0);
 
+        // dbg!(pos, tilemap_offset, format!("{:#06X}", tilemap_addr), tile_index);
 
-        0.try_into().unwrap()
+        let tile_y_offset = pos.y % TILE_HEIGHT;
+        let tile_data_addr = address_type.convert_offset(tile_index);
+        let tile_row_addr = tile_data_addr + tile_y_offset as u16 * ROW_SIZE as u16;
+        let tile_row = memory.load_block(tile_row_addr, tile_row_addr+1);
+
+        self.decode_color(&tile_row, pos.x % 8)
     }
 
     /// Get the color value for the current pixel given a tile row
@@ -516,7 +628,7 @@ impl Ppu {
     }
 
     pub fn set_stat(&mut self, stat: u8) {
-        self.stat = stat;
+        self.stat = stat.into();
     }
 
     pub fn set_palette(&mut self, bgp: u8) {

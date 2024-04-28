@@ -36,6 +36,8 @@ pub const SCY: u16 = 0xFF42;
 pub const SCX: u16 = 0xFF43;
 /// Current scanline
 pub const LY: u16 = 0xFF44;
+/// LY Compare
+pub const LYC: u16 = 0xFF45;
 /// OAM DMA source and start
 /// Writing a byte to this address copies $XX00-$XX9f into $FE00-$FE9F where XX is the byte
 pub const DMA: u16 = 0xFF46;
@@ -195,6 +197,8 @@ impl Mmu {
                 //     // WRAM Bank Select
                 //     self.wram.select(value);
                 // }
+
+                if a == SCX { println!("We got one"); }
 
                 self.io[a as usize] = Some(value);
             }

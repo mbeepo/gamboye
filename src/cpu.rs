@@ -18,11 +18,14 @@ mod instructions;
 mod registers;
 
 const EXT_PREFIX: u8 = 0xCB;
+const STAT_INT: u16 = 0x0048;
 
 #[derive(Clone, Copy, Debug)]
 pub struct IoRegs {
     pub lcdc: u8,
     pub joyp: u8,
+    pub scy: u8,
+    pub scx: u8,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -261,6 +264,7 @@ impl Cpu {
         }
 
         self.ppu.tick(&self.memory);
+
         if self.ppu.status == PpuStatus::EnterVBlank {
             let mut if_reg = self
                 .memory
@@ -269,6 +273,11 @@ impl Cpu {
 
             if_reg |= 1 << 0;
             self.memory.set(memory::IF, if_reg);
+        }
+
+        if self.ppu.stat.int {
+            self.regs.pc = STAT_INT;
+            self.ppu.stat.int = false;
         }
 
         self.tick_div();
@@ -391,7 +400,7 @@ impl Cpu {
 
         let breakpoints = self.pending_breakpoints.clone();
         self.pending_breakpoints = Vec::with_capacity(8);
-        
+
         if let Some(breakpoint) = breakpoints.iter().find_map(|&b| self.breakpoint_controls.check(b)) {
             Ok(CpuStatus::Break(instruction, breakpoint))
         } else {
@@ -759,7 +768,7 @@ impl Cpu {
             memory::LY => Ok(self.ppu.coords.y),
             _ => {
                 if let Some(out) = self.memory.load(addr) {
-                    self.dbg(" -> {out:#04X}\n");
+                    self.dbg(format!(" -> {:#04X}\n", out));
         
                     Ok(out)
                 } else {
@@ -814,6 +823,9 @@ impl Cpu {
                         oam: true,
                     });
                 }
+            }
+            memory::LYC => {
+                println!("LYC <- {:#04X}", value);
             }
             _ => {}
         }
@@ -897,6 +909,8 @@ impl Cpu {
         IoRegs {
             lcdc: self.memory.load(memory::LCDC).unwrap_or(0),
             joyp: self.joyp.serialize(self.host_input),
+            scy: self.memory.load(memory::SCY).unwrap_or(0),
+            scx: self.memory.load(memory::SCX).unwrap_or(0),
         }
     }
 
@@ -910,8 +924,6 @@ impl Cpu {
     }
 
     fn push_event(&mut self, event: CpuEvent) {
-        self.dbg(format!("Event pushed: {event:?}\n"));
-
         if self.breakpoint_controls.master_enable && self.breakpoint_controls.enabled_kinds.is_enabled(event) {
             self.pending_breakpoints.push(event);
         }
