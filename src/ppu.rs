@@ -545,9 +545,12 @@ impl Ppu {
                 // Some(self.decode_bg_color(&bg_tile_line))
                 Some(bg_color)
             } else {
-                let mut obj_y_offset = (self.coords.y + 16).overflowing_sub(obj.y).0; // this motherfucker right here
+                if obj.attributes.priority && !bg_color.transparent {
+                    return Some(bg_color);
+                }
 
-                println!("{:#04X}, {:#04X}, {:#04X}", self.coords.y, scy, obj.y);
+                let mut obj_y_offset = (self.coords.y + 16).overflowing_sub(obj.y).0; // this motherfucker right here
+                
                 if obj.attributes.y_flip {
                     obj_y_offset = self.lcdc.obj_size - 1 - obj_y_offset;
                 }
