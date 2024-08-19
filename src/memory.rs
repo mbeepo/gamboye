@@ -43,6 +43,14 @@ pub const LYC: u16 = 0xFF45;
 pub const DMA: u16 = 0xFF46;
 /// DMG palette
 pub const BGP: u16 = 0xFF47;
+/// DMG object palette 1
+pub const OBP1: u16 = 0xFF48;
+/// DMG object palette 2
+pub const OBP2: u16 = 0xFF49;
+/// Window Y position
+pub const WY: u16 = 0xFF4A;
+/// Window X position + 7
+pub const WX: u16 = 0xFF4B;
 /// WRAM bank select
 pub const SVBK: u16 = 0xFF70;
 /// High RAM

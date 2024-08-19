@@ -1,4 +1,4 @@
-use std::{fmt::Display, ops::{Add, AddAssign, Index}};
+use std::{fmt::Display, ops::{Add, AddAssign, Index, IndexMut}};
 
 use crate::{memory::{self, OAM, OAM_END, SCX, SCY}, Mmu};
 
@@ -160,10 +160,49 @@ pub struct Ppu {
     pub stat: Stat,
     pub coords: PpuCoords,
     pub palette: Palette,
-    pub obj_palettes: [Palette; 2],
+    pub obj_palettes: ObjPalettes,
     pub fb: Vec<u8>,
     pub objects: [Option<Object>; 10],
     pub status: PpuStatus,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ObjPalettes([Palette; 2]);
+
+impl ObjPalettes {
+    pub fn new() -> Self {
+        Self([Palette::new(), Palette::new()])
+    }
+}
+
+impl Index<u8> for ObjPalettes {
+    type Output = Palette;
+    
+    fn index(&self, index: u8) -> &Self::Output {
+        &self.0[index as usize]
+    }
+}
+
+impl IndexMut<u8> for ObjPalettes {    
+    fn index_mut(&mut self, index: u8) -> &mut Self::Output {
+        &mut self.0[index as usize]
+    }
+}
+
+impl Index<ObpSelector> for ObjPalettes {
+    type Output = Palette;
+
+    fn index(&self, index: ObpSelector) -> &Self::Output {
+        let index: usize = index.into();
+        &self.0[index]
+    }
+}
+
+impl IndexMut<ObpSelector> for ObjPalettes {
+    fn index_mut(&mut self, index: ObpSelector) -> &mut Self::Output {
+        let index: usize = index.into();
+        &mut self.0[index]
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -215,6 +254,15 @@ impl From<u8> for ObpSelector {
             0 => Self::Obp0,
             1 => Self::Obp1,
             _ => unreachable!(),
+        }
+    }
+}
+
+impl From<ObpSelector> for usize {
+    fn from(value: ObpSelector) -> Self {
+        match value {
+            ObpSelector::Obp0 => 0,
+            ObpSelector::Obp1 => 1,
         }
     }
 }
@@ -365,7 +413,7 @@ impl Ppu {
         let stat = Stat::new();
         let coords = PpuCoords { x: 0, y: 0 };
         let palette = Palette::new();
-        let obj_palettes = [Palette::new(), Palette::new()];
+        let obj_palettes = ObjPalettes::new();
         let fb = vec![0; 3 * WIDTH as usize * HEIGHT as usize];
         let objects = [None; 10];
         let status = PpuStatus::Drawing;
@@ -505,8 +553,6 @@ impl Ppu {
                 }
                 // get the address of the current object line
                 let obj_data_addr = (UNSIGNED_BASE + obj.index as u16 * TILE_BYTES as u16) + (obj_y_offset as u16 * ROW_SIZE as u16);
-                println!("{:#06X}, {:#04X}, {:#04X}, {:#04X}, {:#04X}", UNSIGNED_BASE, obj.index, TILE_BYTES, obj_y_offset, ROW_SIZE);
-                println!("Obj {:#04X} addr: {:#06X}", obj.index, obj_data_addr);
 
                 //get the current line of the object tile data
                 let obj_tile_line = memory.load_block(obj_data_addr, obj_data_addr + 1);
@@ -587,7 +633,23 @@ impl Ppu {
 
         let mut x_offset = self.coords.x - obj.x;
         if obj.attributes.x_flip { x_offset = TILE_WIDTH - 1 - x_offset; }
-        self.decode_color(tile_row, x_offset)
+        // we start from the left and shift right to bit 0
+        let x_offset = TILE_WIDTH - 1 - x_offset;
+
+        // extract relevant bits
+        // we shift the color bytes first so it's less messy to get 0 or 1
+        // first byte in memory has its bits after the second byte
+        let low = (tile_row[0] >> x_offset) & 1;
+        let high = (tile_row[1] >> x_offset) & 1;
+
+        // high gets shifted up to fill in the upper bit
+        let color_value = (high << 1) | low;
+        let palette = self.get_obj_palette(&obj);
+
+        Color {
+            inner: palette[color_value].inner,
+            transparent: color_value == 0,
+        }
     }
 
     /// Decodes a color from its containing bytes and a horizontal offset from the left edge
@@ -597,7 +659,7 @@ impl Ppu {
 
         // extract relevant bits
         // we shift the color bytes first so it's less messy to get 0 or 1
-        // first byte in memory has its bits after the second byte, probably cause little endian
+        // first byte in memory has its bits after the second byte
         let low = (tile_row[0] >> x_offset) & 1;
         let high = (tile_row[1] >> x_offset) & 1;
 
@@ -662,8 +724,12 @@ impl Ppu {
         self.palette.update(bgp);
     }
 
-    pub fn set_obj_palette(&mut self, index: usize, obp: u8) {
+    pub fn set_obj_palette(&mut self, obp: u8, index: u8) {
         self.obj_palettes[index].update(obp);
+    }
+
+    pub fn get_obj_palette(&self, obj: &Object) -> &Palette {
+        &self.obj_palettes[obj.attributes.dmg_palette]
     }
 
     fn set_stat_reg(&self, memory: &mut Mmu) {

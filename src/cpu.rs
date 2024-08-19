@@ -826,6 +826,12 @@ impl Cpu {
             memory::BGP => {
                 self.ppu.set_palette(value);
             }
+            memory::OBP1 => {
+                self.ppu.set_obj_palette(value, 0);
+            }
+            memory::OBP2 => {
+                self.ppu.set_obj_palette(value, 1);
+            }
             memory::DMA => {
                 if self.dma.is_none() {
                     println!("DMA started from {:#06X} @ {:#06X}", value as u16 * 0x100, self.regs.pc);
