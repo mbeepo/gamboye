@@ -26,6 +26,9 @@ pub struct IoRegs {
     pub joyp: u8,
     pub scy: u8,
     pub scx: u8,
+    pub stat: u8,
+    pub lyc: u8,
+    pub ly: u8,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -171,6 +174,7 @@ pub enum CpuStatus {
     BlockedByDma,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Dma {
     pub cycles_remaining: u8,
     pub source: u16,
@@ -256,6 +260,7 @@ impl Cpu {
             dma.cycles_remaining -= 1;
 
             if dma.cycles_remaining == 0 {
+                println!("DMA Finished");
                 let transfer = &self.memory.load_block(dma.source, dma.source + 0x9F);
                 self.memory.splice(memory::OAM, transfer);
 
@@ -276,7 +281,7 @@ impl Cpu {
         }
 
         if self.ppu.stat.int {
-            self.regs.pc = STAT_INT;
+            if self.regs.ime { self.regs.pc = STAT_INT; }
             self.ppu.stat.int = false;
         }
 
@@ -767,7 +772,12 @@ impl Cpu {
                 let gorp = self.joyp.serialize(self.host_input);
                 Ok(gorp)
             }
-            memory::LY => Ok(self.ppu.coords.y),
+            memory::LY => {
+                Ok(self.ppu.coords.y)
+            }
+            memory::STAT => {
+                Ok(self.ppu.stat.into())
+            }
             _ => {
                 if let Some(out) = self.memory.load(addr) {
                     self.dbg(format!(" -> {:#04X}\n", out));
@@ -789,7 +799,7 @@ impl Cpu {
 
     /// Sets a byte in memory and ticks an M-cycle
     fn mem_set(&mut self, addr: u16, value: u8) {
-        self.dbg("[SET] {addr:#06X} <- {value:#04X}");
+        self.dbg(format!("[SET] {addr:#06X} <- {value:#04X}\n"));
         self.push_event(CpuEvent::MemoryWrite(addr));
         self.tick();
 
@@ -818,7 +828,7 @@ impl Cpu {
             }
             memory::DMA => {
                 if self.dma.is_none() {
-                    // println!("DMA started from {:#06X} @ {:#06X}", value as u16 * 0x100, self.regs.pc);
+                    println!("DMA started from {:#06X} @ {:#06X}", value as u16 * 0x100, self.regs.pc);
                     self.dma = Some(Dma {
                         cycles_remaining: 160,
                         source: value as u16 * 0x100,
@@ -913,6 +923,9 @@ impl Cpu {
             joyp: self.joyp.serialize(self.host_input),
             scy: self.memory.load(memory::SCY).unwrap_or(0),
             scx: self.memory.load(memory::SCX).unwrap_or(0),
+            stat: self.ppu.stat.into(),
+            lyc: self.memory.load(memory::LYC).unwrap_or(0),
+            ly: self.ppu.coords.y,
         }
     }
 

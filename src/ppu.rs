@@ -413,6 +413,10 @@ impl Ppu {
                 self.coords.x = new_x;
 
                 if x_overflowed {
+                    self.coords.y += 1;
+                    self.stat.mode = PpuMode::Mode3;
+                    self.status = PpuStatus::Drawing;
+
                     if self.stat.int_lyc {
                         if let Some(lyc) = memory.load(crate::memory::LYC) {
                             if self.coords.y == lyc {
@@ -450,6 +454,8 @@ impl Ppu {
                         }
                     }
                 }
+
+                return;
             }
             _ => {}
         }
@@ -491,12 +497,16 @@ impl Ppu {
                 // Some(self.decode_bg_color(&bg_tile_line))
                 Some(bg_color)
             } else {
-                let mut obj_y_offset = (self.coords.y + 16).wrapping_add(scy).overflowing_sub(obj.y).0;
+                let mut obj_y_offset = (self.coords.y + 16).overflowing_sub(obj.y).0; // this motherfucker right here
+
+                println!("{:#04X}, {:#04X}, {:#04X}", self.coords.y, scy, obj.y);
                 if obj.attributes.y_flip {
                     obj_y_offset = self.lcdc.obj_size - 1 - obj_y_offset;
                 }
                 // get the address of the current object line
                 let obj_data_addr = (UNSIGNED_BASE + obj.index as u16 * TILE_BYTES as u16) + (obj_y_offset as u16 * ROW_SIZE as u16);
+                println!("{:#06X}, {:#04X}, {:#04X}, {:#04X}, {:#04X}", UNSIGNED_BASE, obj.index, TILE_BYTES, obj_y_offset, ROW_SIZE);
+                println!("Obj {:#04X} addr: {:#06X}", obj.index, obj_data_addr);
 
                 //get the current line of the object tile data
                 let obj_tile_line = memory.load_block(obj_data_addr, obj_data_addr + 1);
@@ -528,40 +538,15 @@ impl Ppu {
         self.fb[index*3..index*3+3].copy_from_slice(&color.to_be_bytes()[0..3]);
         self.coords.x += 1;
 
-        self.status = PpuStatus::Drawing;
-
         if self.coords.x == WIDTH {
             self.stat.mode = PpuMode::Mode0;
+            self.status = PpuStatus::HBlank;
             if self.stat.int_mode0 { self.stat.int = true; }
-            self.coords.x = 0;
-            self.coords.y += 1;
         }
     }
 
     /// Returns the palette color of the background pixel at <pos>
     /// <pos> is a *global* position within the full 256x256 px picture
-    /// 
-    /// (170, 10)
-    /// address_type = unsigned
-    /// bg_map_start = $9800
-    /// tile_x = 170 / 8 % 32
-    ///        = 21 % 32
-    ///        = 21
-    /// tile_y = 10 / 8
-    ///        = 1
-    /// tilemap_offset = 21 + 1 * 32
-    ///                = 21 + 32
-    ///                = 53
-    /// tilemap_addr = $9800 + 53
-    ///                $9835
-    /// tile_index = 10
-    /// tile_y_offset = 1 % 8
-    ///               = 1
-    /// tile_data_addr = $9800 + 10
-    ///                = $980a
-    /// tile_row_addr = $980a + 1 * 2
-    ///               = $980a + 2
-    ///               = $980c
     pub fn get_bg_pixel(&self, memory: &Mmu, pos: PpuCoords) -> Color {
         let address_type = self.lcdc.bg_addressing;
         let bg_map_start: u16 = self.lcdc.bg_map_area;
