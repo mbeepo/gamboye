@@ -66,6 +66,7 @@ impl Cpu {
                     }
                     WordTarget::Immediate => {
                         self.mem_set(source, (self.regs.sp & 0xFF) as u8);
+                        self.tick();
                         self.memory
                             .set(source.wrapping_add(1), ((self.regs.sp & 0xFF00) >> 8) as u8)
                     }

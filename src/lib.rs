@@ -1,12 +1,12 @@
 mod cpu;
 mod gameboy;
-mod memory;
+pub mod memory;
 mod ppu;
 mod input;
 
 pub use gameboy::{Gbc, MBC_ADDR};
 pub use memory::{mbc::MbcSelector, mbc::RamSize, mbc::RomSize, Mmu};
-pub use cpu::{CpuStatus, CpuError, Instruction, CpuEvent, CpuReg, CpuFlag, Registers, IoRegs};
+pub use cpu::{CpuStatus, CpuError, Flags, Instruction, CpuEvent, CpuReg, CpuFlag, Registers, IoRegs};
 pub use ppu::PpuStatus;
 pub use input::{Button, Joyp};
 

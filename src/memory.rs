@@ -64,7 +64,7 @@ pub(crate) enum MmuAddr {
     Vram(u16),
     Wram(u16),
     Oam(u16),
-    Prohibited,
+    Prohibited(u16),
     Io(u16),
     Hram(u16),
     Ie,
@@ -86,8 +86,9 @@ pub struct Mmu {
     // FE00 - FE9F
     oam: [Option<u8>; 0xA0], // sprite attribute table, display information for objects are stored here
     // FEA0 - FEFF is unusable
+    prohibited: [Option<u8>; 0x60],
     // FF00 - FF7F
-    io: [Option<u8>; 0x80], // io registers for interfacing with peripherals
+    pub io: [Option<u8>; 0x80], // io registers for interfacing with peripherals
     // FF80 - FFFE
     hram: [Option<u8>; 0x7F], // high ram, physically located within the cpu, can be used during DMA transfers
     // FFFF
@@ -101,6 +102,7 @@ impl Mmu {
             vram: Box::new(VramBank::new()),
             wram: Box::new(WramBank::new()),
             oam: [None; 0xA0],
+            prohibited: [None; 0x60],
             io: init_io(),
             hram: [None; 0x7F],
             ie: 0,
@@ -140,8 +142,9 @@ impl Mmu {
             MmuAddr::Oam(addr)
         } else if addr < 0xFF00 {
             // FEA0 - FEFF
-            // unusable
-            MmuAddr::Prohibited
+            // prohibited by Them
+            let addr = addr - 0xFEA0;
+            MmuAddr::Prohibited(addr)
         } else if addr < 0xFF80 {
             // FF00 - FF7F
             // IO
@@ -151,7 +154,6 @@ impl Mmu {
             // FF80 - FFFE
             // HRAM
             let addr = addr - 0xFF80;
-
             MmuAddr::Hram(addr)
         } else {
             // FFFF
@@ -172,9 +174,10 @@ impl Mmu {
             MmuAddr::Wram(a) => self.wram.load(a),
             MmuAddr::Oam(a) => self.oam[a as usize],
             // On CGB revision E, reading from this segment returns the high nibble of the lower address byte twice
-            MmuAddr::Prohibited => {
-                let nibble = (addr & 0x00F0) as u8;
-                Some(nibble | nibble >> 4)
+            MmuAddr::Prohibited(a) => {
+                // let nibble = (addr & 0x00F0) as u8;
+                // Some(nibble | nibble >> 4)
+                self.prohibited[a as usize]
             }
             MmuAddr::Io(a) => {
                 self.io[a as usize]
@@ -199,7 +202,7 @@ impl Mmu {
             MmuAddr::Vram(a) => self.vram.set(a, value),
             MmuAddr::Wram(a) => self.wram.set(a, value),
             MmuAddr::Oam(a) => self.oam[a as usize] = Some(value),
-            MmuAddr::Prohibited => {}
+            MmuAddr::Prohibited(a) => self.prohibited[a as usize] = Some(value),
             MmuAddr::Io(a) => {
                 // if addr == SVBK {
                 //     // WRAM Bank Select
@@ -207,7 +210,7 @@ impl Mmu {
                 // }
 
                 if a == SCX { println!("We got one"); }
-
+                
                 self.io[a as usize] = Some(value);
             }
             MmuAddr::Hram(a) => self.hram[a as usize] = Some(value),

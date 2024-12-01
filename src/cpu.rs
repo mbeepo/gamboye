@@ -1,8 +1,8 @@
 use core::fmt;
-use std::{borrow::BorrowMut, collections::HashMap, fmt::Display, fs::File, io::Write, time::Instant};
+use std::{fmt::Display, fs::File, io::Write};
 
 use crate::{
-    input::{ButtonSelection, HostInput, Joyp}, memory::{self, Mmu}, ppu::{Lcdc, Ppu}, Button, PpuStatus
+    input::{HostInput, Joyp}, memory::{self, Mmu}, ppu::Ppu, PpuStatus
 };
 
 use self::instructions::{
@@ -11,7 +11,7 @@ use self::instructions::{
 };
 
 pub use self::instructions::Instruction;
-pub use self::registers::{CpuReg, CpuFlag, Registers};
+pub use self::registers::{CpuReg, CpuFlag, Flags, Registers};
 
 
 mod instructions;
@@ -193,11 +193,11 @@ pub struct Cpu {
     pub host_input: HostInput,
     pub joyp: Joyp,
     ei_called: u8,
-    div: u16,
-    div_last: bool,
+    pub div: u16,
+    div_overflowed: bool,
     tima_overflow: bool,
     stop: bool,
-    tick: usize,
+    pub tick: usize,
     dma: Option<Dma>,
     /// Breakpoints are put here during execution
     /// When the instruction is finished, the system goes through this list and checks if any breakpoints were hit
@@ -226,7 +226,7 @@ impl Cpu {
             joyp: Joyp::new(),
             ei_called: 0,
             div: 0,
-            div_last: false,
+            div_overflowed: false,
             tima_overflow: false,
             stop: false,
             tick: 0,
@@ -268,7 +268,7 @@ impl Cpu {
             }
         }
 
-        self.ppu.tick(&self.memory);
+        self.ppu.tick(&mut self.memory);
 
         if self.ppu.status == PpuStatus::EnterVBlank {
             let mut if_reg = self
@@ -283,16 +283,15 @@ impl Cpu {
         if self.ppu.stat.int {
             if self.regs.ime { self.regs.pc = STAT_INT; }
             self.ppu.stat.int = false;
+            self.memory.set(memory::STAT, self.ppu.stat.into());
         }
-
-        self.memory.set(memory::STAT, self.ppu.stat.into());
 
         self.tick_div();
     }
 
     fn tick_div(&mut self) {
-        // div increases every M-cycle
-        self.div = self.div.wrapping_add(4);
+        // div increases every T-cycle
+        self.div = self.div.wrapping_add(1);
         self.memory.set(memory::DIV, (self.div >> 8) as u8);
 
         let tac = self
@@ -300,7 +299,7 @@ impl Cpu {
             .load(memory::TAC)
             .expect("TAC register uninitialized");
 
-        // numbers from here https://pixelbits.16-b.it/GBEDG/timers/#timer-operation
+        // numbers from here https://hacktix.github.io/GBEDG/timers/
         let div_bit = match tac & 0b11 {
             0b00 => self.div >> 9 & 1,
             0b01 => self.div >> 3 & 1,
@@ -312,7 +311,7 @@ impl Cpu {
         let tac_bit = tac >> 2 & 1;
         let div_and = div_bit & tac_bit == 1;
 
-        if self.div_last == true && div_and == false {
+        if self.div_overflowed == true && div_and == false {
             let (tima, overflowed) = self
                 .memory
                 .load(memory::TIMA)
@@ -326,7 +325,7 @@ impl Cpu {
             }
         }
 
-        self.div_last = div_and;
+        self.div_overflowed = div_and;
     }
 
     /// Executes a CPU instruction and moves the PC to its next position.
@@ -388,12 +387,14 @@ impl Cpu {
         self.push_event(CpuEvent::Instruction(instruction));
         let next_pc = self.execute(instruction)?;
 
-        if self.stop {
-            return Ok(CpuStatus::Stop);
-        }
-
         self.regs.pc = next_pc;
         self.push_event(CpuEvent::Pc(self.regs.pc));
+
+        if self.stop {
+            self.tick();
+            self.tick();
+            return Ok(CpuStatus::Stop);
+        }
 
         // the effects of ei are delayed by one instruction
         if self.ei_called == 1 {
@@ -429,6 +430,8 @@ impl Cpu {
                 return;
             }
 
+            println!("INTERRUPT");
+
             let mut same = [false; 5];
 
             for i in 0..5 {
@@ -439,7 +442,7 @@ impl Cpu {
 
             for i in 0..5 {
                 if same[i] {
-                    // TODO: Push interrupt events when i make this use an enum
+                    // TODO: use an enum and push events
                     // self.push_event(CpuEvent::Interrupt(i));
 
                     // acknowledge the interrupt and prevent further interrupts
@@ -594,23 +597,31 @@ impl Cpu {
 
                 let new_value = self.add_hl(value);
                 self.regs.set_hl(new_value);
+                self.tick();
             }
             Instruction::ADDSP => {
                 let value = self.load_s8()?;
                 self.regs.sp = self.add_sp(value);
                 size = 2;
+                self.tick();
             }
-            Instruction::INCW(target) => match target {
-                WordArithmeticTarget::BC => self.regs.set_bc(self.regs.get_bc().wrapping_add(1)),
-                WordArithmeticTarget::DE => self.regs.set_de(self.regs.get_de().wrapping_add(1)),
-                WordArithmeticTarget::HL => self.regs.set_hl(self.regs.get_hl().wrapping_add(1)),
-                WordArithmeticTarget::SP => self.regs.sp = self.regs.sp.wrapping_add(1),
+            Instruction::INCW(target) => {
+                match target {
+                    WordArithmeticTarget::BC => self.regs.set_bc(self.regs.get_bc().wrapping_add(1)),
+                    WordArithmeticTarget::DE => self.regs.set_de(self.regs.get_de().wrapping_add(1)),
+                    WordArithmeticTarget::HL => self.regs.set_hl(self.regs.get_hl().wrapping_add(1)),
+                    WordArithmeticTarget::SP => self.regs.sp = self.regs.sp.wrapping_add(1),
+                }
+                self.tick();
             },
-            Instruction::DECW(target) => match target {
-                WordArithmeticTarget::BC => self.regs.set_bc(self.regs.get_bc().wrapping_sub(1)),
-                WordArithmeticTarget::DE => self.regs.set_de(self.regs.get_de().wrapping_sub(1)),
-                WordArithmeticTarget::HL => self.regs.set_hl(self.regs.get_hl().wrapping_sub(1)),
-                WordArithmeticTarget::SP => self.regs.sp = self.regs.sp.wrapping_sub(1),
+            Instruction::DECW(target) => {
+                match target {
+                    WordArithmeticTarget::BC => self.regs.set_bc(self.regs.get_bc().wrapping_sub(1)),
+                    WordArithmeticTarget::DE => self.regs.set_de(self.regs.get_de().wrapping_sub(1)),
+                    WordArithmeticTarget::HL => self.regs.set_hl(self.regs.get_hl().wrapping_sub(1)),
+                    WordArithmeticTarget::SP => self.regs.sp = self.regs.sp.wrapping_sub(1),
+                }
+                self.tick();
             },
             Instruction::BIT(target, bit) => {
                 let byte = match target {
@@ -692,7 +703,6 @@ impl Cpu {
             Instruction::DAA => self.regs.a = self.daa(),
             Instruction::STOP => {
                 self.stop = true;
-                return Ok(self.regs.pc);
             }
             Instruction::HALT => self.halted = true,
             Instruction::NOP => {}
@@ -761,47 +771,32 @@ impl Cpu {
     fn mem_load(&mut self, addr: u16) -> Result<u8, CpuError> {
         self.dbg(format!("[LOAD] {:#06X}", addr));
         self.push_event(CpuEvent::MemoryRead(addr));
-        self.tick();
 
         // if self.oam_dma_running() && addr < memory::HRAM {
         //     return Ok(0);
         // }
+        let out = if let Some(out) = self.memory.load(addr) {
+            self.dbg(format!(" -> {:#04X}\n", out));
 
-        match addr {
-            memory::JOYP => {
-                let gorp = self.joyp.serialize(self.host_input);
-                Ok(gorp)
-            }
-            memory::LY => {
-                Ok(self.ppu.coords.y)
-            }
-            memory::STAT => {
-                Ok(self.ppu.stat.into())
-            }
-            _ => {
-                if let Some(out) = self.memory.load(addr) {
-                    self.dbg(format!(" -> {:#04X}\n", out));
-        
-                    Ok(out)
-                } else {
-                    if self.allow_uninit {
-                        Ok(0)
-                    } else {
-                        self.dbg("\n");
-        
-                        Err(CpuError::MemoryLoadFail(addr))
-                    }
-                }
-            }
-        }
+            Ok(out)
+        } else {
+            if self.allow_uninit {
+                Ok(0)
+            } else {
+                self.dbg("\n");
 
+                Err(CpuError::MemoryLoadFail(addr))
+            }
+        };
+        
+        self.tick();
+        out
     }
 
     /// Sets a byte in memory and ticks an M-cycle
     fn mem_set(&mut self, addr: u16, value: u8) {
         self.dbg(format!("[SET] {addr:#06X} <- {value:#04X}\n"));
         self.push_event(CpuEvent::MemoryWrite(addr));
-        self.tick();
 
         // if self.oam_dma_running() && addr < memory::HRAM {
         //     return;
@@ -810,6 +805,7 @@ impl Cpu {
         match addr {
             memory::JOYP => {
                 self.joyp.change_selection(value | 0b11001111).ok();
+                self.memory.set(addr, self.joyp.selection as u8);
                 return;
             }
             memory::DIV => {
@@ -819,18 +815,23 @@ impl Cpu {
             }
             memory::LCDC => {
                 self.ppu.set_lcdc(value);
+                self.memory.set(addr, value);
             }
             memory::STAT => {
                 self.ppu.set_stat(value);
+                self.memory.set(addr, value);
             }
             memory::BGP => {
                 self.ppu.set_palette(value);
+                self.memory.set(addr, value);
             }
             memory::OBP1 => {
                 self.ppu.set_obj_palette(value, 0);
+                self.memory.set(addr, value);
             }
             memory::OBP2 => {
                 self.ppu.set_obj_palette(value, 1);
+                self.memory.set(addr, value);
             }
             memory::DMA => {
                 if self.dma.is_none() {
@@ -849,6 +850,7 @@ impl Cpu {
         }
 
         self.memory.set(addr, value);
+        self.tick();
     }
 
     fn load_from_hl(&mut self) -> Result<u8, CpuError> {

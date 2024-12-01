@@ -434,7 +434,9 @@ impl Ppu {
     /// 
     /// TODO:
     /// - Window
-    pub fn tick(&mut self, memory: &Mmu) {
+    pub fn tick(&mut self, memory: &mut Mmu) {
+        if !self.lcdc.lcd_enable { return };
+
         match self.status {
             PpuStatus::EnterVBlank => {
                 self.coords.x += 1;
@@ -462,6 +464,7 @@ impl Ppu {
 
                 if x_overflowed {
                     self.coords.y += 1;
+                    memory.set(memory::LY, self.coords.y);
                     self.stat.mode = PpuMode::Mode3;
                     self.status = PpuStatus::Drawing;
 
@@ -475,7 +478,7 @@ impl Ppu {
                             }
                         }
                     }
-        
+    
                     if self.coords.y >= HEIGHT {
                         self.status = PpuStatus::EnterVBlank;
                         self.stat.mode = PpuMode::Mode1;
