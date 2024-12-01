@@ -612,9 +612,6 @@ impl Ppu {
         };
 
         let index = self.coords.x as usize + self.coords.y as usize * WIDTH as usize;
-
-        if index == 0 { println!("ZERO: {color:?}"); }
-
         self.fb[index*3..index*3+3].copy_from_slice(&color.to_be_bytes()[0..3]);
         self.coords.x += 1;
 
