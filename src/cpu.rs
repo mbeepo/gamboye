@@ -266,7 +266,6 @@ impl Cpu {
             dma.cycles_remaining -= 1;
 
             if dma.cycles_remaining == 0 {
-                println!("DMA Finished");
                 let transfer = &self.memory.load_block(dma.source, dma.source + 0x9F);
                 self.memory.splice(memory::OAM, transfer);
 
@@ -430,8 +429,6 @@ impl Cpu {
             if ie & if_reg == 0 {
                 return;
             }
-
-            println!("INTERRUPT");
 
             let mut same = [false; 5];
 
@@ -773,20 +770,31 @@ impl Cpu {
         self.dbg(format!("[LOAD] {:#06X}", addr));
         self.push_event(CpuEvent::MemoryRead(addr));
 
-        // if self.oam_dma_running() && addr < memory::HRAM {
-        //     return Ok(0);
-        // }
-        let out = if let Some(out) = self.memory.load(addr) {
-            self.dbg(format!(" -> {:#04X}\n", out));
-
-            Ok(out)
-        } else {
-            if self.allow_uninit {
-                Ok(0)
-            } else {
-                self.dbg("\n");
-
-                Err(CpuError::MemoryLoadFail(addr))
+        let out = match addr {
+            memory::JOYP => {
+                let gorp = self.joyp.serialize(self.host_input);
+                Ok(gorp)
+            }
+            memory::LY => {
+                Ok(self.ppu.coords.y)
+            }
+            memory::STAT => {
+                Ok(self.ppu.stat.into())
+            }
+            _ => {
+                if let Some(out) = self.memory.load(addr) {
+                    self.dbg(format!(" -> {:#04X}\n", out));
+        
+                    Ok(out)
+                } else {
+                    if self.allow_uninit {
+                        Ok(0)
+                    } else {
+                        self.dbg("\n");
+        
+                        Err(CpuError::MemoryLoadFail(addr))
+                    }
+                }
             }
         };
         
@@ -837,7 +845,6 @@ impl Cpu {
             }
             memory::DMA => {
                 if self.dma.is_none() {
-                    println!("DMA started from {:#06X} @ {:#06X}", value as u16 * 0x100, self.regs.pc);
                     self.dma = Some(Dma {
                         cycles_remaining: 160,
                         source: value as u16 * 0x100,
