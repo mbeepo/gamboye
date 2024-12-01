@@ -2,7 +2,7 @@ use core::fmt;
 use std::{fmt::Display, fs::File, io::Write};
 
 use crate::{
-    input::{HostInput, Joyp}, memory::{self, Mmu}, ppu::Ppu, PpuStatus
+    input::{HostInput, Joyp}, memory::{self, Mmu, LCDC}, ppu::Ppu, PpuStatus
 };
 
 use self::instructions::{
@@ -42,6 +42,7 @@ pub enum CpuEvent {
     Interrupt(u8),
     Flag(CpuFlag),
     Reg(CpuReg),
+    LdBb,
 }
 
 impl PartialEq for CpuEvent {
@@ -69,6 +70,7 @@ impl PartialEq for CpuEvent {
             (Reg(lhs), Reg(rhs)) => {
                 lhs == rhs
             },
+            (LdBb, LdBb) => true,
             (_, _) => false,
         }
     }
@@ -85,6 +87,7 @@ pub struct EnabledBreakpoints {
     pub interrupt: bool,
     pub flag_change: bool,
     pub reg_change: bool,
+    pub ld_b_b: bool,
 }
 
 impl EnabledBreakpoints {
@@ -99,6 +102,7 @@ impl EnabledBreakpoints {
             interrupt: true,
             flag_change: true,
             reg_change: true,
+            ld_b_b: true,
         }
     }
     
@@ -114,6 +118,7 @@ impl EnabledBreakpoints {
             Interrupt(_) => self.interrupt,
             Flag(_) => self.flag_change,
             Reg(_) => self.reg_change,
+            LdBb => self.ld_b_b,
         }
     }
 }
@@ -135,6 +140,7 @@ impl Breakpoints {
     }
     
     /// This is used to check if an internal event matches any active breakpoints
+    /// 
     /// If it does match, the breakpoint is passed back out to be forwarded to the frontend
     fn check(&self, value: CpuEvent) -> Option<CpuEvent> {
         if !self.master_enable || !self.enabled_kinds.is_enabled(value) {
@@ -280,12 +286,6 @@ impl Cpu {
             self.memory.set(memory::IF, if_reg);
         }
 
-        if self.ppu.stat.int {
-            if self.regs.ime { self.regs.pc = STAT_INT; }
-            self.ppu.stat.int = false;
-            self.memory.set(memory::STAT, self.ppu.stat.into());
-        }
-
         self.tick_div();
     }
 
@@ -352,6 +352,7 @@ impl Cpu {
 
             if ie & if_reg > 0 {
                 self.halted = false;
+                self.handle_interrupts();
             }
 
             self.tick();
@@ -641,7 +642,7 @@ impl Cpu {
 
                 self.bit(byte, bit);
             }
-            Instruction::RES(target, bit) | Instruction::SET(target, bit) => {
+            Instruction::RES(target, bit) | Instruction::SET(target, bit) => {                
                 let byte = match target {
                     ArithmeticTarget::A => self.regs.a,
                     ArithmeticTarget::B => self.regs.b,
@@ -814,6 +815,7 @@ impl Cpu {
                 return;
             }
             memory::LCDC => {
+                println!("LCDC <- {value:#04X}");
                 self.ppu.set_lcdc(value);
                 self.memory.set(addr, value);
             }
@@ -845,6 +847,10 @@ impl Cpu {
             }
             memory::LYC => {
                 println!("LYC <- {:#04X}", value);
+            }
+            memory::WY => {
+                println!("WY <- {:#04X}", value);
+                self.ppu.window_ly = 0;
             }
             _ => {}
         }

@@ -1,4 +1,4 @@
-use crate::cpu::{Cpu, CpuError};
+use crate::{cpu::{Cpu, CpuError}, CpuEvent};
 
 use super::{AddressSource, ByteAddressSource, ByteSource, ByteTarget, LoadType, WordTarget};
 
@@ -7,6 +7,10 @@ impl Cpu {
     pub(crate) fn ld(&mut self, transfer: LoadType) -> Result<u16, CpuError> {
         match transfer {
             LoadType::Byte(target, source) => {
+                if target == ByteTarget::B && source == ByteSource::B {
+                    self.push_event(CpuEvent::LdBb);
+                }
+
                 let value = match source {
                     ByteSource::A => self.regs.a,
                     ByteSource::B => self.regs.b,

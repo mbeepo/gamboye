@@ -1,6 +1,6 @@
 use std::{fmt::Display, ops::{Add, AddAssign, Index, IndexMut}};
 
-use crate::{memory::{self, OAM, OAM_END, SCX, SCY}, Mmu};
+use crate::{memory::{self, OAM, OAM_END, SCX, SCY, WX, WY}, Mmu};
 
 // darkening shades of grey
 const PALETTE: [Color; 4] = [
@@ -34,6 +34,9 @@ const WIDTH_IN_TILES: u8 = 32;
 const UNSIGNED_BASE: u16 = 0x8000;
 /// Base address for signed bg addressing mode
 const SIGNED_BASE: u16 = 0x9000;
+
+/// The scanline number that VBlank ends at
+const VBLANK_END: u8 = 154;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Lcdc {
@@ -159,6 +162,7 @@ pub struct Ppu {
     pub lcdc: Lcdc,
     pub stat: Stat,
     pub coords: PpuCoords,
+    pub window_ly: u8,
     pub palette: Palette,
     pub obj_palettes: ObjPalettes,
     pub fb: Vec<u8>,
@@ -250,7 +254,7 @@ pub enum ObpSelector {
 
 impl From<u8> for ObpSelector {
     fn from(value: u8) -> Self {
-        match (value & 0b00010_0000) >> 5 {
+        match (value & 0b0001_0000) >> 4 {
             0 => Self::Obp0,
             1 => Self::Obp1,
             _ => unreachable!(),
@@ -279,6 +283,26 @@ pub struct PpuCoords {
     pub y: u8,
 }
 
+impl PpuCoords {
+    pub fn overflowing_add<T: Into<PpuCoords>>(self, rhs: T) -> (Self, bool, bool) {
+        let rhs: PpuCoords = rhs.into();
+        let (x, x_overflow) = self.x.overflowing_add(rhs.x);
+        let (y, y_overflow) = self.y.overflowing_add(rhs.y);
+        let out = PpuCoords { x, y };
+
+        (out, x_overflow, y_overflow)
+    }
+
+    pub fn overflowing_sub<T: Into<PpuCoords>>(self, rhs: T) -> (Self, bool, bool) {
+        let rhs: PpuCoords = rhs.into();
+        let (x, x_overflow) = self.x.overflowing_sub(rhs.x);
+        let (y, y_overflow) = self.y.overflowing_sub(rhs.y);
+        let out = PpuCoords { x, y };
+
+        (out, x_overflow, y_overflow)
+    }
+}
+
 impl Add<(u8, u8)> for PpuCoords {
     type Output = PpuCoords;
 
@@ -293,6 +317,12 @@ impl AddAssign<(u8, u8)> for PpuCoords {
     fn add_assign(&mut self, rhs: (u8, u8)) {
         self.x += rhs.0;
         self.y += rhs.1;
+    }
+}
+
+impl From<(u8, u8)> for PpuCoords {
+    fn from(value: (u8, u8)) -> Self {
+        Self { x: value.0, y: value.1 }
     }
 }
 
@@ -412,6 +442,7 @@ impl Ppu {
         let lcdc = 0x91.into();
         let stat = Stat::new();
         let coords = PpuCoords { x: 0, y: 0 };
+        let window_ly = 0;
         let palette = Palette::new();
         let obj_palettes = ObjPalettes::new();
         let fb = vec![0; 3 * WIDTH as usize * HEIGHT as usize];
@@ -422,6 +453,7 @@ impl Ppu {
             lcdc,
             stat,
             coords,
+            window_ly,
             palette,
             obj_palettes,
             fb,
@@ -448,8 +480,33 @@ impl Ppu {
                 self.coords.x = new_x;
 
                 if x_overflowed {
-                    let (new_y, y_overflowed) = self.coords.y.overflowing_add(1);
+                    let (new_y, y_overflowed) = {
+                        let new_y = self.coords.y + 1;
+                        if new_y == VBLANK_END {
+                            (0, true)
+                        } else {
+                            (new_y, false)
+                        }
+                    };
+
+                    if memory.load(WY).is_some_and(|e| e == self.coords.y) {
+                        self.window_ly = 0;
+                    }
+
                     self.coords.y = new_y;
+                    memory.set(memory::LY, self.coords.y);
+
+                    if self.lcdc.window_enable {
+                        self.window_ly = {
+                            let new_y = self.window_ly + 1;
+                            dbg!(self.coords.y, new_y);
+                            if new_y == VBLANK_END {
+                                0
+                            } else {
+                                new_y
+                            }
+                        };
+                    }
 
                     if y_overflowed {
                         self.status = PpuStatus::Drawing;
@@ -468,11 +525,29 @@ impl Ppu {
                     self.stat.mode = PpuMode::Mode3;
                     self.status = PpuStatus::Drawing;
 
+                    if self.lcdc.window_enable {
+                        self.window_ly = {
+                            let new_y = self.window_ly + 1;
+                            dbg!(self.coords.y, new_y);
+                            if new_y == VBLANK_END {
+                                0
+                            } else {
+                                new_y
+                            }
+                        };
+                    }
+
+                    if memory.load(WY).is_some_and(|e| e == self.coords.y) {
+                        self.window_ly = 0;
+                    }
+
                     if self.stat.int_lyc {
                         if let Some(lyc) = memory.load(crate::memory::LYC) {
                             if self.coords.y == lyc {
                                 self.stat.lyc_match = true;
                                 self.stat.int = true;
+                                let if_reg = memory.load(crate::memory::IF).unwrap_or(0);
+                                memory.set(crate::memory::IF, if_reg | (1 << 1))
                             } else {
                                 self.stat.lyc_match = false;
                             }
@@ -490,18 +565,16 @@ impl Ppu {
                     // find objects on this line
                     // TODO: Update for 8x16
                     self.objects = Default::default();
+                    let mut obj_count = 0;
                     let objects = memory.load_block(OAM, OAM_END);
-                    let mut obj_index = 0;
-        
-                    for index in 0..objects.len() / 4 {
-                        let obj_bytes = &objects[index*4..index*4+4];
-                        let obj: Object = obj_bytes.into();
-                        
-                        if (self.coords.y + 16).overflowing_sub(obj.y).0 < 8 {
-                            self.objects[obj_index] = Some(obj);
-                            obj_index += 1;
-        
-                            if obj_index == 10 { break; }
+
+                    for obj in objects.chunks(4).map(|e| Object::from(e)) {                        
+                        let offset = self.obj_y_offset(&obj);
+                        if offset.is_some_and(|e| e < self.lcdc.obj_size) {
+                            self.objects[obj_count] = Some(obj);
+                            obj_count += 1;
+
+                            if obj_count == 10 { break };
                         }
                     }
                 }
@@ -513,9 +586,21 @@ impl Ppu {
 
         let scx = memory.load(SCX).unwrap_or(0);
         let scy = memory.load(SCY).unwrap_or(0);
-        if scx != 0 { dbg!(scx); }
-        let pos = self.coords + (scx, scy);
-        let bg_color = self.get_bg_pixel(memory, pos);
+        let pos = self.coords.overflowing_add((scx, scy)).0;
+
+        let window_pos = {
+            let x = memory.load(WX).unwrap_or(u8::MAX).overflowing_sub(7).0;
+            let y = memory.load(WY).unwrap_or(u8::MAX);
+            PpuCoords { x, y }
+        };
+
+        let bg_color = if self.lcdc.window_enable
+                && window_pos.x < 160 && window_pos.y < 143 {
+            let window_coords = PpuCoords::from((self.coords.x.overflowing_add(window_pos.x).0, self.window_ly));
+            self.get_window_pixel(memory, window_coords)
+        } else {
+            self.get_bg_pixel(memory, pos)
+        };
 
         // let address_type = self.lcdc.bg_addressing;
         // let bg_map_area: u16 = self.lcdc.bg_map_area;
@@ -534,10 +619,11 @@ impl Ppu {
         // let bg_data_addr = address_type.convert_offset(tile_index);
         // let bg_data_addr = bg_data_addr + tile_y_offset as u16 * ROW_SIZE as u16;
 
-        // get the object to draw, if any
         let mut obj = self.objects.iter().filter(
-            |obj| obj.map(|obj| (self.coords.x + 8).overflowing_sub(obj.x).0 < 8).unwrap_or(false)
-        ).map(|obj| *obj).flatten();
+            |obj| obj.is_some_and(|obj| if let Some(x) = self.obj_x_offset(&obj) {
+                x < 8
+            } else { false }
+        )).map(|obj| *obj).flatten();
 
         // // get the current line of the bg tile data
         // // 2 bytes per sprite row, combined into 8 2-bit palette indexes
@@ -545,15 +631,14 @@ impl Ppu {
 
         let color = obj.find_map(|obj| {
             if !self.lcdc.obj_enable {
-                // Some(self.decode_bg_color(&bg_tile_line))
                 Some(bg_color)
             } else {
                 if obj.attributes.priority && !bg_color.transparent {
                     return Some(bg_color);
                 }
 
-                let mut obj_y_offset = (self.coords.y + 16).overflowing_sub(obj.y).0; // this motherfucker right here
-                
+                let mut obj_y_offset = self.obj_y_offset(&obj).expect("Y offset out of range"); // this motherfucker right here
+
                 if obj.attributes.y_flip {
                     obj_y_offset = self.lcdc.obj_size - 1 - obj_y_offset;
                 }
@@ -562,7 +647,6 @@ impl Ppu {
 
                 //get the current line of the object tile data
                 let obj_tile_line = memory.load_block(obj_data_addr, obj_data_addr + 1);
-
                 let color = self.decode_obj_color(&obj_tile_line, obj);
 
                 // if self.coords.y < 2 {
@@ -597,26 +681,63 @@ impl Ppu {
         }
     }
 
-    /// Returns the palette color of the background pixel at <pos>
-    /// <pos> is a *global* position within the full 256x256 px picture
+    /// Returns the palette color of the background pixel at `pos`
+    /// 
+    /// `[pos]` is a *global* position within the full 256x256 px picture
     pub fn get_bg_pixel(&self, memory: &Mmu, pos: PpuCoords) -> Color {
         let address_type = self.lcdc.bg_addressing;
-        let bg_map_start: u16 = self.lcdc.bg_map_area;
-        // The byte offset of the tile row within BG tile data
+        let bg_map_start = self.lcdc.bg_map_area;
+        
         let tile_x = pos.x / TILE_WIDTH % WIDTH_IN_TILES;
         let tile_y = pos.y / TILE_HEIGHT;
+
         let tilemap_offset = tile_x as u16 + (tile_y as u16 * WIDTH_IN_TILES as u16);
         let tilemap_addr = bg_map_start + tilemap_offset;
+
         let tile_index = memory.load(tilemap_addr).unwrap_or(0);
-
-        // dbg!(pos, tilemap_offset, format!("{:#06X}", tilemap_addr), tile_index);
-
         let tile_y_offset = pos.y % TILE_HEIGHT;
+
         let tile_data_addr = address_type.convert_offset(tile_index);
         let tile_row_addr = tile_data_addr + tile_y_offset as u16 * ROW_SIZE as u16;
         let tile_row = memory.load_block(tile_row_addr, tile_row_addr+1);
 
         self.decode_color(&tile_row, pos.x % 8)
+    }
+
+    pub fn get_window_pixel(&self, memory: &Mmu, pos: PpuCoords) -> Color {
+        let address_type = self.lcdc.bg_addressing;
+        let window_map_start = self.lcdc.window_map_area;
+        
+        let tile_x = pos.x / TILE_WIDTH % WIDTH_IN_TILES;
+        let tile_y = pos.y / TILE_HEIGHT;
+
+        let tilemap_offset = tile_x as u16 + (tile_y as u16 * WIDTH_IN_TILES as u16);
+        let tilemap_addr = window_map_start + tilemap_offset;
+
+        let tile_index = memory.load(tilemap_addr).unwrap_or(0);
+        let tile_y_offset = pos.y % TILE_HEIGHT;
+        
+        let tile_data_addr = address_type.convert_offset(tile_index);
+        let tile_row_addr = tile_data_addr + tile_y_offset as u16 * ROW_SIZE as u16;
+        let tile_row = memory.load_block(tile_row_addr, tile_row_addr+1);
+
+        self.decode_color(&tile_row, pos.x % 8)
+    }
+
+    pub fn obj_x_offset(&self, obj: &Object) -> Option<u8> {
+        if let Some(x) = obj.x.checked_sub(8) {
+            self.coords.x.checked_sub(x)
+        } else {
+            None
+        }
+    }
+
+    pub fn obj_y_offset(&self, obj: &Object) -> Option<u8> {
+        if let Some(y) = obj.y.checked_sub(16) {
+            self.coords.y.checked_sub(y)
+        } else {
+            None
+        }
     }
 
     /// Get the color value for the current pixel given a tile row
@@ -637,7 +758,7 @@ impl Ppu {
             return Color::from_u32(0xFFFFFFFF);
         }
 
-        let mut x_offset = self.coords.x - obj.x;
+        let mut x_offset = self.obj_x_offset(&obj).expect("OBJ X offset should be checked before decoding");
         if obj.attributes.x_flip { x_offset = TILE_WIDTH - 1 - x_offset; }
         // we start from the left and shift right to bit 0
         let x_offset = TILE_WIDTH - 1 - x_offset;
@@ -765,7 +886,7 @@ impl From<&[u8]> for Object {
                 y: value[0],
                 x: value[1],
                 index: value[2],
-                attributes: value[3].into(),
+                attributes: value[3].into()
             }
         } else {
             Self { y: 0, x: 0, index: 0, attributes: 0.into() }

@@ -338,7 +338,7 @@ pub enum LoadType {
     SPOffset,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ByteSource {
     A,
     B,
@@ -351,7 +351,7 @@ pub enum ByteSource {
     Immediate,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ByteTarget {
     A,
     B,
@@ -363,7 +363,7 @@ pub enum ByteTarget {
     HL,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WordTarget {
     BC,
     DE,
@@ -374,7 +374,7 @@ pub enum WordTarget {
     Immediate,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AddressSource {
     BC,
     DE,
@@ -383,13 +383,13 @@ pub enum AddressSource {
     Immediate,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ByteAddressSource {
     Immediate,
     C,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StackTarget {
     BC,
     DE,
