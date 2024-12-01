@@ -284,13 +284,11 @@ pub struct PpuCoords {
 }
 
 impl PpuCoords {
-    pub fn overflowing_add<T: Into<PpuCoords>>(self, rhs: T) -> (Self, bool, bool) {
+    pub fn wrapping_add<T: Into<PpuCoords>>(self, rhs: T) -> Self {
         let rhs: PpuCoords = rhs.into();
-        let (x, x_overflow) = self.x.overflowing_add(rhs.x);
-        let (y, y_overflow) = self.y.overflowing_add(rhs.y);
-        let out = PpuCoords { x, y };
-
-        (out, x_overflow, y_overflow)
+        let x = self.x.wrapping_add(rhs.x);
+        let y = self.y.wrapping_add(rhs.y);
+        PpuCoords { x, y }
     }
 
     pub fn overflowing_sub<T: Into<PpuCoords>>(self, rhs: T) -> (Self, bool, bool) {
@@ -355,9 +353,12 @@ impl Palette {
         let color1 = (bgp >> 2) & 0b11;
         let color2 = (bgp >> 4) & 0b11;
         let color3 = (bgp >> 6) & 0b11;
+        
+        let mut color0 = PALETTE[color0 as usize];
+        color0.transparent = true;
 
         [
-            PALETTE[color0 as usize],
+            color0,
             PALETTE[color1 as usize],
             PALETTE[color2 as usize],
             PALETTE[color3 as usize],
@@ -462,10 +463,6 @@ impl Ppu {
         }
     }
     
-    /// Returns status of PPU (either `Drawing` or `VBlank`)
-    /// 
-    /// TODO:
-    /// - Window
     pub fn tick(&mut self, memory: &mut Mmu) {
         if !self.lcdc.lcd_enable { return };
 
@@ -489,27 +486,13 @@ impl Ppu {
                         }
                     };
 
-                    if memory.load(WY).is_some_and(|e| e == self.coords.y) {
-                        self.window_ly = 0;
-                    }
-
                     self.coords.y = new_y;
                     memory.set(memory::LY, self.coords.y);
 
-                    if self.lcdc.window_enable {
-                        self.window_ly = {
-                            let new_y = self.window_ly + 1;
-                            dbg!(self.coords.y, new_y);
-                            if new_y == VBLANK_END {
-                                0
-                            } else {
-                                new_y
-                            }
-                        };
-                    }
-
                     if y_overflowed {
+                        self.window_ly = 0;
                         self.status = PpuStatus::Drawing;
+                        self.find_objects(&memory);
                     }
                 }
 
@@ -526,19 +509,12 @@ impl Ppu {
                     self.status = PpuStatus::Drawing;
 
                     if self.lcdc.window_enable {
-                        self.window_ly = {
-                            let new_y = self.window_ly + 1;
-                            dbg!(self.coords.y, new_y);
-                            if new_y == VBLANK_END {
-                                0
-                            } else {
-                                new_y
-                            }
-                        };
-                    }
-
-                    if memory.load(WY).is_some_and(|e| e == self.coords.y) {
-                        self.window_ly = 0;
+                        let wx = memory.load(WX).unwrap_or(u8::MAX);
+                        let wy = memory.load(WY).unwrap_or(u8::MAX);
+                        if wx <= 166 && self.coords.y > wy {
+                            dbg!(self.coords.y);
+                            self.window_ly = self.window_ly.wrapping_add(1);
+                        }
                     }
 
                     if self.stat.int_lyc {
@@ -563,20 +539,7 @@ impl Ppu {
                     }
         
                     // find objects on this line
-                    // TODO: Update for 8x16
-                    self.objects = Default::default();
-                    let mut obj_count = 0;
-                    let objects = memory.load_block(OAM, OAM_END);
-
-                    for obj in objects.chunks(4).map(|e| Object::from(e)) {                        
-                        let offset = self.obj_y_offset(&obj);
-                        if offset.is_some_and(|e| e < self.lcdc.obj_size) {
-                            self.objects[obj_count] = Some(obj);
-                            obj_count += 1;
-
-                            if obj_count == 10 { break };
-                        }
-                    }
+                    self.find_objects(&memory);
                 }
 
                 return;
@@ -586,48 +549,32 @@ impl Ppu {
 
         let scx = memory.load(SCX).unwrap_or(0);
         let scy = memory.load(SCY).unwrap_or(0);
-        let pos = self.coords.overflowing_add((scx, scy)).0;
+        let pos = self.coords.wrapping_add((scx, scy));
 
         let window_pos = {
-            let x = memory.load(WX).unwrap_or(u8::MAX).overflowing_sub(7).0;
+            let x = memory.load(WX).unwrap_or(u8::MAX).wrapping_sub(7);
             let y = memory.load(WY).unwrap_or(u8::MAX);
             PpuCoords { x, y }
         };
 
-        let bg_color = if self.lcdc.window_enable
-                && window_pos.x < 160 && window_pos.y < 143 {
-            let window_coords = PpuCoords::from((self.coords.x.overflowing_add(window_pos.x).0, self.window_ly));
+        let mut bg_color = if self.lcdc.window_enable
+                && self.coords.y >= window_pos.y && self.coords.x >= window_pos.x {
+            let x = self.coords.x - window_pos.x;
+            let window_coords = PpuCoords::from((x, self.window_ly));
             self.get_window_pixel(memory, window_coords)
         } else {
             self.get_bg_pixel(memory, pos)
         };
 
-        // let address_type = self.lcdc.bg_addressing;
-        // let bg_map_area: u16 = self.lcdc.bg_map_area;
-
-        // let scy = memory.load(SCY).unwrap_or(0);
-        // let tile_x = ((self.coords.x / TILE_WIDTH).wrapping_add(memory.load(SCX).unwrap_or(0) / TILE_WIDTH)) % WIDTH_IN_TILES;
-        // let tile_y = (self.coords.y.wrapping_add(scy)) / TILE_HEIGHT;
-        // let tilemap_offset = tile_x as usize + tile_y as usize * WIDTH_IN_TILES as usize;
-        // let tilemap_addr = bg_map_area + tilemap_offset as u16;
-
-        // // the byte in the tilemap points to the tile index
-        // let tile_index = memory.load(tilemap_addr).unwrap_or(0);
-
-        // // get the y offset within the tile
-        // let tile_y_offset = (self.coords.y.wrapping_add(scy)) % TILE_HEIGHT;
-        // let bg_data_addr = address_type.convert_offset(tile_index);
-        // let bg_data_addr = bg_data_addr + tile_y_offset as u16 * ROW_SIZE as u16;
+        if !self.lcdc.bg_enable {
+            bg_color = self.palette[0];
+        }
 
         let mut obj = self.objects.iter().filter(
             |obj| obj.is_some_and(|obj| if let Some(x) = self.obj_x_offset(&obj) {
                 x < 8
             } else { false }
         )).map(|obj| *obj).flatten();
-
-        // // get the current line of the bg tile data
-        // // 2 bytes per sprite row, combined into 8 2-bit palette indexes
-        // let bg_tile_line = memory.load_block(bg_data_addr, bg_data_addr + 1);
 
         let color = obj.find_map(|obj| {
             if !self.lcdc.obj_enable {
@@ -649,11 +596,6 @@ impl Ppu {
                 let obj_tile_line = memory.load_block(obj_data_addr, obj_data_addr + 1);
                 let color = self.decode_obj_color(&obj_tile_line, obj);
 
-                // if self.coords.y < 2 {
-                //     dbg!(obj);
-                //     println!("{color}")
-                // }
-
                 // color 0 is transparent for objects, so we should fall back to the background
                 if color.transparent {
                     None
@@ -666,11 +608,13 @@ impl Ppu {
         let color = if let Some(color) = color {
             color
         } else {
-            // self.decode_bg_color(&bg_tile_line)
             bg_color
         };
 
         let index = self.coords.x as usize + self.coords.y as usize * WIDTH as usize;
+
+        if index == 0 { println!("ZERO: {color:?}"); }
+
         self.fb[index*3..index*3+3].copy_from_slice(&color.to_be_bytes()[0..3]);
         self.coords.x += 1;
 
@@ -859,8 +803,32 @@ impl Ppu {
         &self.obj_palettes[obj.attributes.dmg_palette]
     }
 
-    fn set_stat_reg(&self, memory: &mut Mmu) {
-        memory.set(memory::STAT, self.stat.into());
+    fn find_objects(&mut self, memory: &Mmu) {
+        self.objects = Default::default();
+        let mut obj_count = 0;
+        let objects = memory.load_block(OAM, OAM_END);
+        let mut out: Vec<Object> = Vec::with_capacity(10);
+
+        for obj in objects.chunks(4).map(|e| {
+            let mut out = Object::from(e);
+            if self.lcdc.obj_size == 16 {
+                out.index &= 0xFE;
+            }
+            out
+        }) {                        
+            let offset = self.obj_y_offset(&obj);
+            if offset.is_some_and(|e| e < self.lcdc.obj_size) {
+                out.push(obj);
+                obj_count += 1;
+
+                if obj_count == 10 { break };
+            }
+        }
+
+        out.sort_by(|a, b| a.x.cmp(&b.x));
+        let mut out: Vec<Option<Object>> = out.iter().map(|e| Some(*e)).collect();
+        out.extend_from_slice(&vec![None; 10 - out.len()]);
+        self.objects = out.try_into().expect("Somehow we got too many objects");
     }
 }
 

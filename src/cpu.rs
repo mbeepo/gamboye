@@ -848,10 +848,6 @@ impl Cpu {
             memory::LYC => {
                 println!("LYC <- {:#04X}", value);
             }
-            memory::WY => {
-                println!("WY <- {:#04X}", value);
-                self.ppu.window_ly = 0;
-            }
             _ => {}
         }
 
