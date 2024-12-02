@@ -11,11 +11,14 @@ mod bank;
 mod init;
 pub mod mbc;
 
-/// Object memory
+/// Object memory start
 pub const OAM: u16 = 0xFE00;
+/// Object memory end
 pub const OAM_END: u16 = 0xFE9F;
-// Joypad input
+/// Joypad input
 pub const JOYP: u16 = 0xFF00;
+/// Serial transfer control
+pub const SC: u16 = 0xFF02;
 /// Internal timer
 pub const DIV: u16 = 0xFF04;
 /// User facing timer
@@ -208,8 +211,6 @@ impl Mmu {
                 //     // WRAM Bank Select
                 //     self.wram.select(value);
                 // }
-
-                if a == SCX { println!("We got one"); }
                 
                 self.io[a as usize] = Some(value);
             }

@@ -168,6 +168,7 @@ pub struct Ppu {
     pub fb: Vec<u8>,
     pub objects: [Option<Object>; 10],
     pub status: PpuStatus,
+    pub enabled: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -449,6 +450,7 @@ impl Ppu {
         let fb = vec![0; 3 * WIDTH as usize * HEIGHT as usize];
         let objects = [None; 10];
         let status = PpuStatus::Drawing;
+        let enabled = true;
 
         Self {
             lcdc,
@@ -460,6 +462,7 @@ impl Ppu {
             fb,
             objects,
             status,
+            enabled,
         }
     }
     
@@ -488,6 +491,7 @@ impl Ppu {
 
                     self.coords.y = new_y;
                     memory.set(memory::LY, self.coords.y);
+                    self.check_lyc(memory);
 
                     if y_overflowed {
                         self.window_ly = 0;
@@ -512,23 +516,11 @@ impl Ppu {
                         let wx = memory.load(WX).unwrap_or(u8::MAX);
                         let wy = memory.load(WY).unwrap_or(u8::MAX);
                         if wx <= 166 && self.coords.y > wy {
-                            dbg!(self.coords.y);
                             self.window_ly = self.window_ly.wrapping_add(1);
                         }
                     }
 
-                    if self.stat.int_lyc {
-                        if let Some(lyc) = memory.load(crate::memory::LYC) {
-                            if self.coords.y == lyc {
-                                self.stat.lyc_match = true;
-                                self.stat.int = true;
-                                let if_reg = memory.load(crate::memory::IF).unwrap_or(0);
-                                memory.set(crate::memory::IF, if_reg | (1 << 1))
-                            } else {
-                                self.stat.lyc_match = false;
-                            }
-                        }
-                    }
+                    self.check_lyc(memory);
     
                     if self.coords.y >= HEIGHT {
                         self.status = PpuStatus::EnterVBlank;
@@ -826,6 +818,21 @@ impl Ppu {
         let mut out: Vec<Option<Object>> = out.iter().map(|e| Some(*e)).collect();
         out.extend_from_slice(&vec![None; 10 - out.len()]);
         self.objects = out.try_into().expect("Somehow we got too many objects");
+    }
+
+    fn check_lyc(&mut self, memory: &mut Mmu) {
+        if self.stat.int_lyc {
+            if let Some(lyc) = memory.load(crate::memory::LYC) {
+                if self.coords.y == lyc {
+                    self.stat.lyc_match = true;
+                    self.stat.int = true;
+                    let if_reg = memory.load(crate::memory::IF).unwrap_or(0);
+                    memory.set(crate::memory::IF, if_reg | (1 << 1))
+                } else {
+                    self.stat.lyc_match = false;
+                }
+            }
+        }
     }
 }
 

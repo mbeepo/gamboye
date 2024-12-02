@@ -200,7 +200,7 @@ pub struct Cpu {
     pub joyp: Joyp,
     ei_called: u8,
     pub div: u16,
-    div_overflowed: bool,
+    div_and: bool,
     tima_overflow: bool,
     stop: bool,
     pub tick: usize,
@@ -232,7 +232,7 @@ impl Cpu {
             joyp: Joyp::new(),
             ei_called: 0,
             div: 0,
-            div_overflowed: false,
+            div_and: false,
             tima_overflow: false,
             stop: false,
             tick: 0,
@@ -249,7 +249,7 @@ impl Cpu {
     /// Ticks the system by 1 M-cycle, stepping the PPU and DIV
     pub(crate) fn tick(&mut self) {
         // there is a single tick delay between TIMA overflowing and IF.2 being set
-        self.tick += 1;
+        self.tick += 4;
         if self.tima_overflow {
             let mut if_reg = self
                 .memory
@@ -290,8 +290,7 @@ impl Cpu {
 
     fn tick_div(&mut self) {
         // div increases every T-cycle
-        self.div = self.div.wrapping_add(1);
-        self.memory.set(memory::DIV, (self.div >> 8) as u8);
+        self.div = self.div.wrapping_add(4);
 
         let tac = self
             .memory
@@ -310,21 +309,23 @@ impl Cpu {
         let tac_bit = tac >> 2 & 1;
         let div_and = div_bit & tac_bit == 1;
 
-        if self.div_overflowed == true && div_and == false {
+        if !self.div_and && div_and {
             let (tima, overflowed) = self
                 .memory
                 .load(memory::TIMA)
                 .unwrap_or(0)
                 .overflowing_add(1);
 
-            self.memory.set(memory::TIMA, tima);
-
             if overflowed {
+                let tma = self.memory.load(memory::TMA).unwrap_or(0);
+                self.memory.set(memory::TIMA, tma);
                 self.tima_overflow = true;
+            } else {
+                self.memory.set(memory::TIMA, tima);
             }
         }
 
-        self.div_overflowed = div_and;
+        self.div_and = div_and;
     }
 
     /// Executes a CPU instruction and moves the PC to its next position.
@@ -420,26 +421,26 @@ impl Cpu {
     fn handle_interrupts(&mut self) {
         if self.regs.ime {
             let ie = self
-                .mem_load(memory::IE)
+                .memory.load(memory::IE)
                 .expect("Error reading IE register: Uninitialized");
             let if_reg = self
-                .mem_load(memory::IF)
+                .memory.load(memory::IF)
                 .expect("Error reading IF register: Uninitialized");
+            // let ie = self
+            //     .mem_load(memory::IE)
+            //     .expect("Error reading IE register: Uninitialized");
+            // let if_reg = self
+            //     .mem_load(memory::IF)
+            //     .expect("Error reading IF register: Uninitialized");
 
             if ie & if_reg == 0 {
                 return;
             }
 
-            let mut same = [false; 5];
-
             for i in 0..5 {
                 let ie_bit = ie & (1 << i);
 
-                same[i] = ie_bit > 0 && ie_bit == if_reg & (1 << i);
-            }
-
-            for i in 0..5 {
-                if same[i] {
+                if ie_bit > 0 && ie_bit == if_reg & (1 << i) {
                     // TODO: use an enum and push events
                     // self.push_event(CpuEvent::Interrupt(i));
 
@@ -456,8 +457,8 @@ impl Cpu {
 
                     // the 16 bit ISR address is loaded into pc, taking another cycle
                     self.regs.pc = 0x40 + 0x08 * i as u16;
-
                     self.tick();
+
                     return;
                 }
             }
@@ -466,7 +467,9 @@ impl Cpu {
 
     /// Executes a single instruction
     pub(crate) fn execute(&mut self, instruction: Instruction) -> Result<u16, CpuError> {
-        self.dbg(format!("\nExecuting instruction\n{:?}\n{}\n", instruction, self.regs));
+        if self.debug {
+            self.dbg(format!("\nExecuting instruction\n{:?}\n{}\n", instruction, self.regs));
+        }
 
         let mut size = 1;
         let old_regs = self.regs;
@@ -767,7 +770,10 @@ impl Cpu {
     /// - `Ok(value)` if a byte was read successfully
     /// - `Err(addr)` if the byte at the address was uninitialized, and `Self::allow_uninit` is false
     fn mem_load(&mut self, addr: u16) -> Result<u8, CpuError> {
-        self.dbg(format!("[LOAD] {:#06X}", addr));
+        if self.debug {
+            self.dbg(format!("[LOAD] {:#06X}", addr));
+        }
+        self.tick();
         self.push_event(CpuEvent::MemoryRead(addr));
 
         let out = match addr {
@@ -776,14 +782,27 @@ impl Cpu {
                 Ok(gorp)
             }
             memory::LY => {
-                Ok(self.ppu.coords.y)
+                if self.ppu.enabled {
+                    Ok(self.ppu.coords.y)
+                } else {
+                    Ok(0xFF)
+                }
             }
             memory::STAT => {
                 Ok(self.ppu.stat.into())
             }
+            memory::DIV => {
+                Ok((self.div >> 8) as u8)
+            }
             _ => {
+                if addr == memory::SC && !self.ppu.enabled {
+                    return Ok(0xFF);
+                }
+
                 if let Some(out) = self.memory.load(addr) {
-                    self.dbg(format!(" -> {:#04X}\n", out));
+                    if self.debug {
+                        self.dbg(format!(" -> {:#04X}\n", out));
+                    }
         
                     Ok(out)
                 } else {
@@ -798,14 +817,16 @@ impl Cpu {
             }
         };
         
-        self.tick();
         out
     }
 
     /// Sets a byte in memory and ticks an M-cycle
     fn mem_set(&mut self, addr: u16, value: u8) {
-        self.dbg(format!("[SET] {addr:#06X} <- {value:#04X}\n"));
+        if self.debug {
+            self.dbg(format!("[SET] {addr:#06X} <- {value:#04X}\n"));
+        }
         self.push_event(CpuEvent::MemoryWrite(addr));
+        self.tick();
 
         // if self.oam_dma_running() && addr < memory::HRAM {
         //     return;
@@ -823,7 +844,6 @@ impl Cpu {
                 return;
             }
             memory::LCDC => {
-                println!("LCDC <- {value:#04X}");
                 self.ppu.set_lcdc(value);
                 self.memory.set(addr, value);
             }
@@ -852,14 +872,10 @@ impl Cpu {
                     });
                 }
             }
-            memory::LYC => {
-                println!("LYC <- {:#04X}", value);
-            }
             _ => {}
         }
 
         self.memory.set(addr, value);
-        self.tick();
     }
 
     fn load_from_hl(&mut self) -> Result<u8, CpuError> {

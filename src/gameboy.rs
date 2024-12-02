@@ -23,21 +23,19 @@ impl Gbc {
         self.cpu.load_rom(data);
     }
 
-    /// Entry point for the emulator
-    // pub fn start(&mut self) {
-    //     self.cpu.main_loop();
-    // }
-
     /// Move the system forward by one CPU tick
-    /// 
-    /// `fb` must have a length of 4 * 160 * 144 (91,260)
     pub fn step(&mut self) -> (Result<CpuStatus, CpuError>, PpuStatus) {
         (self.cpu.step(), self.cpu.ppu.status)
     }
 
     /// Reads the serial buffer
-    pub fn read_serial(&mut self) -> u8 {
-        self.cpu.memory.read_serial()
+    pub fn read_serial(&mut self) -> Option<u8> {
+        let byte = self.cpu.memory.read_serial();
+        if byte == 0xFF {
+            None
+        } else {
+            Some(byte)
+        }
     }
 
     // / Copies the internal framebuffer to a slice
@@ -56,5 +54,10 @@ impl Gbc {
 
     fn set_button(&mut self, button: Button, to: bool) {
         *self.cpu.host_input.get_mut(button) = to
+    }
+
+    pub fn disable_ppu(&mut self) {
+        println!("PPU DISABLED");
+        self.cpu.ppu.enabled = false;
     }
 }
