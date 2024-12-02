@@ -23,9 +23,15 @@ impl Gbc {
         self.cpu.load_rom(data);
     }
 
-    /// Move the system forward by one CPU tick
-    pub fn step(&mut self) -> (Result<CpuStatus, CpuError>, PpuStatus) {
-        (self.cpu.step(), self.cpu.ppu.status)
+    /// Run one instruction
+    /// 
+    /// The second part of the return value is whether the framebuffer is ready to draw
+    pub fn step(&mut self) -> (Result<CpuStatus, CpuError>, bool) {
+        (self.cpu.step(), self.cpu.ppu.draw_ready)
+    }
+
+    pub fn set_drawn(&mut self) {
+        self.cpu.ppu.draw_ready = false;
     }
 
     /// Reads the serial buffer

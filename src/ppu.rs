@@ -169,6 +169,7 @@ pub struct Ppu {
     pub objects: [Option<Object>; 10],
     pub status: PpuStatus,
     pub enabled: bool,
+    pub draw_ready: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -451,6 +452,7 @@ impl Ppu {
         let objects = [None; 10];
         let status = PpuStatus::Drawing;
         let enabled = true;
+        let draw_ready = false;
 
         Self {
             lcdc,
@@ -463,6 +465,7 @@ impl Ppu {
             objects,
             status,
             enabled,
+            draw_ready,
         }
     }
     
@@ -471,6 +474,7 @@ impl Ppu {
 
         match self.status {
             PpuStatus::EnterVBlank => {
+                self.draw_ready = true;
                 self.coords.x += 1;
                 self.status = PpuStatus::VBlank;
                 return;
