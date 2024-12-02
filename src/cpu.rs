@@ -273,7 +273,9 @@ impl Cpu {
             }
         }
 
-        self.ppu.tick(&mut self.memory);
+        if self.ppu.enabled {
+            self.ppu.tick(&mut self.memory);
+        }
 
         if self.ppu.status == PpuStatus::EnterVBlank {
             let mut if_reg = self
