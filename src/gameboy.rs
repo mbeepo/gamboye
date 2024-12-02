@@ -63,7 +63,6 @@ impl Gbc {
     }
 
     pub fn disable_ppu(&mut self) {
-        println!("PPU DISABLED");
         self.cpu.ppu.enabled = false;
     }
 }
