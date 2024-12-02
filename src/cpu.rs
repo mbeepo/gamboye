@@ -680,7 +680,7 @@ impl Cpu {
             Instruction::JP(test) => return self.jp(test),
             Instruction::JR(test) => return self.jr(test),
             Instruction::JPHL => return Ok(self.jphl()),
-            Instruction::LD(transfer) => return Ok(self.regs.pc.wrapping_add(self.ld(transfer)?)),
+            Instruction::LD(transfer) => size = self.ld(transfer)?,
             Instruction::PUSH(source) => {
                 let value = match source {
                     StackTarget::BC => self.regs.get_bc(),
