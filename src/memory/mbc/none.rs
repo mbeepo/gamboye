@@ -21,9 +21,8 @@ impl Mbc for NoMbc {
         let addr = self.translate(addr);
 
         match addr {
-            MbcAddr::Rom0(a) => self.rom[a as usize] = Some(value),
-            MbcAddr::RomX(_) => unreachable!(),
             MbcAddr::Ram(a) => self.ram[a as usize] = Some(value),
+            _ => {},
         }
     }
 
@@ -39,11 +38,14 @@ impl Mbc for NoMbc {
         match self.translate((data.len() - 1) as u16) {
             MbcAddr::Rom0(_) => {
                 for addr in 0..data.len() {
-                    self.set(addr as u16, data[addr]);
+                    let MbcAddr::Rom0(addr) = self.translate(addr as u16) else {
+                        panic!("That's not right");
+                    };
+                    self.rom[addr as usize] = Some(data[addr as usize]);
                 }
             }
             MbcAddr::RomX(_) => unreachable!(),
-            // the translate method should have panicked if addr was outside of the entire MBCk
+            // the translate method should have panicked if addr was outside of the entire MBC
             MbcAddr::Ram(_) => panic!("He ROM too big for he got damn MBC"),
         };
     }
