@@ -548,7 +548,7 @@ impl Ppu {
         let pos = self.coords.wrapping_add((scx, scy));
 
         let window_pos = {
-            let x = memory.load(WX).unwrap_or(u8::MAX).wrapping_sub(7);
+            let x = memory.load(WX).unwrap_or(u8::MAX).saturating_sub(7);
             let y = memory.load(WY).unwrap_or(u8::MAX);
             PpuCoords { x, y }
         };
@@ -673,7 +673,7 @@ impl Ppu {
         if let Some(y) = obj.y.checked_sub(16) {
             self.coords.y.checked_sub(y)
         } else {
-            None
+            16u8.checked_sub(obj.y)
         }
     }
 
