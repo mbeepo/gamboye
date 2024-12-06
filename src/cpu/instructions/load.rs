@@ -1,8 +1,8 @@
-use crate::{cpu::{Cpu, CpuError}, CpuEvent};
+use crate::{cpu::{Cpu, CpuError}, memory::Memory, CpuEvent};
 
 use super::{AddressSource, ByteAddressSource, ByteSource, ByteTarget, LoadType, WordTarget};
 
-impl Cpu {
+impl<T: Memory> Cpu<T> {
     /// Loads data from one place to another
     pub(crate) fn ld(&mut self, transfer: LoadType) -> Result<u16, CpuError> {
         match transfer {
@@ -171,11 +171,11 @@ impl Cpu {
 mod tests {
     use crate::{
         cpu::Cpu,
-        memory::{mbc::MbcSelector, Mmu},
+        memory::{mbc::MbcSelector, Memory, Mmu},
         ppu::Ppu,
     };
 
-    fn init() -> Cpu {
+    fn init() -> Cpu<Mmu> {
         let mmu = Mmu::new(MbcSelector::NoMbc);
         let ppu = Ppu::new();
 

@@ -1,6 +1,6 @@
-use crate::{cpu::Cpu, CpuFlag};
+use crate::{cpu::Cpu, memory::Memory, CpuFlag};
 
-impl Cpu {
+impl<T: Memory> Cpu<T> {
     /// Flips the carry flag
     ///
     /// ### Flag States
@@ -316,15 +316,12 @@ mod tests {
             instructions::{ArithmeticTarget, Instruction},
             Cpu,
         },
-        memory::{
-            mbc::{MbcSelector, NoMbc},
-            Mmu,
-        },
+        memory::FlatMemory,
         ppu::Ppu,
     };
 
-    fn init() -> Cpu {
-        let mmu = Mmu::new(MbcSelector::NoMbc);
+    fn init() -> Cpu<FlatMemory> {
+        let mmu = FlatMemory::new();
         let ppu = Ppu::new();
 
         Cpu::new(mmu, ppu, false, true)

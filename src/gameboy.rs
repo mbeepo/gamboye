@@ -1,16 +1,26 @@
 use crate::{
     cpu::{Cpu, CpuError, CpuStatus},
-    memory::{mbc::MbcSelector, Mmu},
-    ppu::{Ppu, PpuStatus}, Button,
+    memory::{mbc::MbcSelector, FlatMemory, Memory, Mmu},
+    ppu::Ppu, Button,
 };
 
 pub const MBC_ADDR: usize = 0x0147;
 
-pub struct Gbc {
-    pub cpu: Cpu,
+pub struct Gbc<T: Memory> {
+    pub cpu: Cpu<T>,
 }
 
-impl Gbc {
+impl Gbc<FlatMemory> {
+    pub fn new_flat(debug: bool, allow_uninit: bool) -> Self {
+        let memory = FlatMemory::new();
+        let ppu = Ppu::new();
+        let cpu = Cpu::new(memory, ppu, debug, allow_uninit);
+
+        Self { cpu }
+    }
+}
+
+impl Gbc<Mmu> {
     pub fn new(mbc: MbcSelector, debug: bool, allow_uninit: bool) -> Self {
         let memory = Mmu::new(mbc);
         let ppu = Ppu::new();
@@ -18,7 +28,9 @@ impl Gbc {
 
         Self { cpu }
     }
+}
 
+impl<T: Memory> Gbc<T> {
     pub fn load_rom(&mut self, data: &[u8]) {
         self.cpu.load_rom(data);
     }

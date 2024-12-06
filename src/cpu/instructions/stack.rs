@@ -1,6 +1,6 @@
-use crate::cpu::{Cpu, CpuError};
+use crate::{cpu::{Cpu, CpuError}, memory::Memory};
 
-impl Cpu {
+impl<T: Memory> Cpu<T> {
     /// Pops a word from the stack
     pub(crate) fn pop_word(&mut self) -> Result<u16, CpuError> {
         let low = self.pop()? as u16;
@@ -39,12 +39,12 @@ impl Cpu {
 mod tests {
     use crate::{
         cpu::Cpu,
-        memory::{mbc::MbcSelector, Mmu},
+        memory::{FlatMemory, Memory},
         ppu::Ppu,
     };
 
-    fn init() -> Cpu {
-        let mmu = Mmu::new(MbcSelector::NoMbc);
+    fn init() -> Cpu<FlatMemory> {
+        let mmu = FlatMemory::new();
         let ppu = Ppu::new();
 
         Cpu::new(mmu, ppu, false, true)

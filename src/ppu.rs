@@ -1,6 +1,6 @@
 use std::{fmt::Display, ops::{Add, AddAssign, Index, IndexMut}};
 
-use crate::{memory::{self, OAM, OAM_END, SCX, SCY, WX, WY}, Mmu};
+use crate::{memory::{self, Memory, OAM, OAM_END, SCX, SCY, WX, WY}, Mmu};
 
 // darkening shades of grey
 const PALETTE: [Color; 4] = [
@@ -469,7 +469,7 @@ impl Ppu {
         }
     }
     
-    pub fn tick(&mut self, memory: &mut Mmu) {
+    pub fn tick<T: Memory>(&mut self, memory: &mut T) {
         if !self.lcdc.lcd_enable { return };
 
         match self.status {
@@ -500,7 +500,7 @@ impl Ppu {
                     if y_overflowed {
                         self.window_ly = 0;
                         self.status = PpuStatus::Drawing;
-                        self.find_objects(&memory);
+                        self.find_objects(&*memory);
                     }
                 }
 
@@ -535,7 +535,7 @@ impl Ppu {
                     }
         
                     // find objects on this line
-                    self.find_objects(&memory);
+                    self.find_objects(&*memory);
                 }
 
                 return;
@@ -621,7 +621,7 @@ impl Ppu {
     /// Returns the palette color of the background pixel at `pos`
     /// 
     /// `[pos]` is a *global* position within the full 256x256 px picture
-    pub fn get_bg_pixel(&self, memory: &Mmu, pos: PpuCoords) -> Color {
+    pub fn get_bg_pixel<T: Memory>(&self, memory: &T, pos: PpuCoords) -> Color {
         let address_type = self.lcdc.bg_addressing;
         let bg_map_start = self.lcdc.bg_map_area;
         
@@ -641,7 +641,7 @@ impl Ppu {
         self.decode_color(&tile_row, pos.x % 8)
     }
 
-    pub fn get_window_pixel(&self, memory: &Mmu, pos: PpuCoords) -> Color {
+    pub fn get_window_pixel<T: Memory>(&self, memory: &T, pos: PpuCoords) -> Color {
         let address_type = self.lcdc.bg_addressing;
         let window_map_start = self.lcdc.window_map_area;
         
@@ -796,7 +796,7 @@ impl Ppu {
         &self.obj_palettes[obj.attributes.dmg_palette]
     }
 
-    fn find_objects(&mut self, memory: &Mmu) {
+    fn find_objects<T: Memory>(&mut self, memory: &T) {
         self.objects = Default::default();
         let mut obj_count = 0;
         let objects = memory.load_block(OAM, OAM_END);
@@ -824,7 +824,7 @@ impl Ppu {
         self.objects = out.try_into().expect("Somehow we got too many objects");
     }
 
-    fn check_lyc(&mut self, memory: &mut Mmu) {
+    fn check_lyc<T: Memory>(&mut self, memory: &mut T) {
         if self.stat.int_lyc {
             if let Some(lyc) = memory.load(crate::memory::LYC) {
                 if self.coords.y == lyc {

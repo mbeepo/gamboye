@@ -2,7 +2,7 @@ use core::fmt;
 use std::{fmt::Display, fs::File, io::Write};
 
 use crate::{
-    input::{HostInput, Joyp}, memory::{self, Mmu, LCDC}, ppu::Ppu, PpuStatus
+    input::{HostInput, Joyp}, memory::{self, Memory, Mmu, LCDC}, ppu::Ppu, PpuStatus
 };
 
 use self::instructions::{
@@ -187,9 +187,9 @@ pub struct Dma {
     pub oam: bool,
 }
 
-pub struct Cpu {
+pub struct Cpu<T: Memory> {
     pub regs: Registers,
-    pub memory: Box<Mmu>,
+    pub memory: Box<T>,
     pub ppu: Ppu,
     pub double_speed: bool,
     pub halted: bool,
@@ -202,7 +202,7 @@ pub struct Cpu {
     pub div: u16,
     div_and: bool,
     tima_overflow: bool,
-    stop: bool,
+    pub stop: bool,
     pub tick: usize,
     dma: Option<Dma>,
     /// Breakpoints are put here during execution
@@ -211,8 +211,8 @@ pub struct Cpu {
     log: Option<File>,
 }
 
-impl Cpu {
-    pub fn new(memory: Mmu, ppu: Ppu, debug: bool, allow_uninit: bool) -> Self {
+impl<T: Memory> Cpu<T> {
+    pub fn new(memory: T, ppu: Ppu, debug: bool, allow_uninit: bool) -> Self {
         let log = if debug {
             Some(File::create("gb.log").unwrap())
         } else {
@@ -274,7 +274,7 @@ impl Cpu {
         }
 
         if self.ppu.enabled {
-            self.ppu.tick(&mut self.memory);
+            self.ppu.tick(&mut *self.memory);
         }
 
         if self.ppu.status == PpuStatus::EnterVBlank {
@@ -779,26 +779,21 @@ impl Cpu {
         self.push_event(CpuEvent::MemoryRead(addr));
 
         let out = match addr {
-            memory::JOYP => {
-                let gorp = self.joyp.serialize(self.host_input);
-                Ok(gorp)
-            }
-            memory::LY => {
-                if self.ppu.enabled {
-                    Ok(self.ppu.coords.y)
-                } else {
-                    Ok(0xFF)
-                }
-            }
-            memory::STAT => {
-                Ok(self.ppu.stat.into())
-            }
             memory::DIV => {
                 Ok((self.div >> 8) as u8)
             }
             _ => {
-                if addr == memory::SC && !self.ppu.enabled {
-                    return Ok(0xFF);
+                if !self.ppu.enabled {
+                    if addr == memory::LY {
+                        return Ok(0xFF);
+                    }
+                } else {
+                    if addr == memory::JOYP {
+                        let gorp = self.joyp.serialize(self.host_input);
+                        return Ok(gorp);
+                    } else if addr == memory::STAT {
+                        return Ok(self.ppu.stat.into());
+                    }
                 }
 
                 if let Some(out) = self.memory.load(addr) {
@@ -808,11 +803,10 @@ impl Cpu {
         
                     Ok(out)
                 } else {
+                    self.dbg(" = [uninit]\n");
                     if self.allow_uninit {
                         Ok(0)
                     } else {
-                        self.dbg("\n");
-        
                         Err(CpuError::MemoryLoadFail(addr))
                     }
                 }
@@ -837,8 +831,11 @@ impl Cpu {
         match addr {
             memory::JOYP => {
                 self.joyp.change_selection(value | 0b11001111).ok();
-                self.memory.set(addr, self.joyp.selection as u8);
-                return;
+
+                if self.ppu.enabled {
+                    self.memory.set(addr, self.joyp.selection as u8);
+                    return;
+                }
             }
             memory::DIV => {
                 self.div = 0;
@@ -847,23 +844,18 @@ impl Cpu {
             }
             memory::LCDC => {
                 self.ppu.set_lcdc(value);
-                self.memory.set(addr, value);
             }
             memory::STAT => {
                 self.ppu.set_stat(value);
-                self.memory.set(addr, value);
             }
             memory::BGP => {
                 self.ppu.set_palette(value);
-                self.memory.set(addr, value);
             }
             memory::OBP1 => {
                 self.ppu.set_obj_palette(value, 0);
-                self.memory.set(addr, value);
             }
             memory::OBP2 => {
                 self.ppu.set_obj_palette(value, 1);
-                self.memory.set(addr, value);
             }
             memory::DMA => {
                 if self.dma.is_none() {

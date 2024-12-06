@@ -1,6 +1,8 @@
 //! TODO:
 //!     Abstract over checking IO registers
 
+use std::default;
+
 use self::{
     bank::{VramBank, WramBank},
     init::init_io,
@@ -61,6 +63,41 @@ pub const HRAM: u16 = 0xFF80;
 /// Granular interrupt enable
 pub const IE: u16 = 0xFFFF;
 
+pub trait Memory {
+    /// Attempts to retrieve a byte of data from memory at the address `addr`
+    ///
+    /// ### Return Variants
+    /// - `Some<u8>` if the selected cell is initialized
+    /// - `None` if the selected cell is uninitialized
+    fn load(&self, addr: u16) -> Option<u8>;
+    
+    fn load_rom(&mut self, data: &[u8]);
+    
+    /// Sets the cell at address `addr` to the value stored in `value`
+    ///
+    /// ### Side Effects
+    /// This method may have internal side effects, as listed below:
+    /// - If `addr` == `0xFF70`, the selected WRAM bank will be changed using the new value
+    fn set(&mut self, addr: u16, value: u8);
+
+    /// Splices a set of `values` into memory, starting at `start`
+    fn splice(&mut self, start: u16, values: &[u8]);
+
+    /// Returns a block of memory
+    ///
+    /// `start` and `end` are inclusive
+    ///
+    /// Will return `0` for any uninitialized cells
+    fn load_block(&self, start: u16, end: u16) -> Vec<u8>;
+
+    /// Reads the serial value from SB if SC.7 is set
+    ///
+    /// Returns 0xFF if SC.7 is not set, or either SB or SC are uninitialized
+    ///
+    /// Mutable so it can reset SC.7 to signal that the byte was sent
+    fn read_serial(&mut self) -> u8;
+}
+
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub(crate) enum MmuAddr {
     Mbc(u16),
@@ -111,9 +148,8 @@ impl Mmu {
             ie: 0,
         }
     }
-
     /// Translates a global memory address to an internally usable enum variant
-    pub(crate) fn translate(addr: u16) -> MmuAddr {
+    fn translate(addr: u16) -> MmuAddr {
         if addr < 0x8000 {
             // 0000 - 7FFF
             // MBC ROM
@@ -164,13 +200,16 @@ impl Mmu {
             MmuAddr::Ie
         }
     }
+}
+
+impl Memory for Mmu {
 
     /// Attempts to retrieve a byte of data from memory at the address `addr`
     ///
     /// ### Return Variants
     /// - `Some<u8>` if the selected cell is initialized
     /// - `None` if the selected cell is uninitialized
-    pub fn load(&self, addr: u16) -> Option<u8> {
+    fn load(&self, addr: u16) -> Option<u8> {
         match Self::translate(addr) {
             MmuAddr::Mbc(a) => self.mbc.load(a),
             MmuAddr::Vram(a) => self.vram.load(a),
@@ -190,7 +229,7 @@ impl Mmu {
         }
     }
 
-    pub fn load_rom(&mut self, data: &[u8]) {
+    fn load_rom(&mut self, data: &[u8]) {
         self.mbc.load_rom(data);
     }
 
@@ -199,7 +238,7 @@ impl Mmu {
     /// ### Side Effects
     /// This method may have internal side effects, as listed below:
     /// - If `addr` == `0xFF70`, the selected WRAM bank will be changed using the new value
-    pub fn set(&mut self, addr: u16, value: u8) {
+    fn set(&mut self, addr: u16, value: u8) {
         match Self::translate(addr) {
             MmuAddr::Mbc(a) => self.mbc.set(a, value),
             MmuAddr::Vram(a) => self.vram.set(a, value),
@@ -220,7 +259,7 @@ impl Mmu {
     }
 
     /// Splices a set of `values` into memory, starting at `start`
-    pub fn splice(&mut self, start: u16, values: &[u8]) {
+    fn splice(&mut self, start: u16, values: &[u8]) {
         for rel in 0..values.len() as u16 {
             let abs = rel.wrapping_add(start);
             self.set(abs, values[rel as usize]);
@@ -232,7 +271,7 @@ impl Mmu {
     /// `start` and `end` are inclusive
     ///
     /// Will return `0` for any uninitialized cells
-    pub fn load_block(&self, start: u16, end: u16) -> Vec<u8> {
+    fn load_block(&self, start: u16, end: u16) -> Vec<u8> {
         (start..=end).map(|i| self.load(i).unwrap_or(0)).collect()
     }
 
@@ -241,7 +280,7 @@ impl Mmu {
     /// Returns 0xFF if SC.7 is not set, or either SB or SC are uninitialized
     ///
     /// Mutable so it can reset SC.7 to signal that the byte was sent
-    pub fn read_serial(&mut self) -> u8 {
+    fn read_serial(&mut self) -> u8 {
         if let Some(sc) = self.load(0xFF02) {
             if sc & (1 << 7) > 0 {
                 let out = self.load(0xFF01).unwrap_or(0xFF);
@@ -258,8 +297,46 @@ impl Mmu {
     }
 }
 
+pub struct FlatMemory {
+    pub inner: Box<[u8; u16::MAX as usize + 1]>
+}
+
+impl FlatMemory {
+    pub fn new() -> Self {
+        Self { inner: Box::new([0; u16::MAX as usize + 1]) }
+    }
+}
+
+impl Memory for FlatMemory {
+    fn load(&self, addr: u16) -> Option<u8> {
+        Some(self.inner[addr as usize])
+    }
+
+    fn load_block(&self, start: u16, end: u16) -> Vec<u8> {
+        self.inner[start as usize..=end as usize].to_vec()
+    }
+
+    fn load_rom(&mut self, data: &[u8]) {
+        self.inner[0..data.len()].copy_from_slice(data);
+    }
+
+    fn set(&mut self, addr: u16, value: u8) {
+        self.inner[addr as usize] = value;
+    }
+
+    fn splice(&mut self, start: u16, values: &[u8]) {
+        self.inner[start as usize..start as usize+values.len()].copy_from_slice(values);
+    }
+
+    fn read_serial(&mut self) -> u8 {
+        0xFF
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::memory::Memory;
+
     use super::{mbc::MbcSelector, Mmu, MmuAddr};
 
     fn init_nombc() -> Mmu {

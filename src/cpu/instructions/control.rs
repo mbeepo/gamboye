@@ -1,8 +1,8 @@
-use crate::cpu::{Cpu, CpuError};
+use crate::{cpu::{Cpu, CpuError}, memory::Memory};
 
 use super::JumpTest;
 
-impl Cpu {
+impl<T: Memory> Cpu<T> {
     /// Jumps to the address contained in the next two bytes if JumpTest succeeds
     pub(crate) fn jp(&mut self, test: JumpTest) -> Result<u16, CpuError> {
         let jump = match test {
@@ -122,12 +122,12 @@ impl Cpu {
 mod tests {
     use crate::{
         cpu::Cpu,
-        memory::{mbc::MbcSelector, Mmu},
+        memory::{FlatMemory, Memory},
         ppu::Ppu,
     };
 
-    fn init() -> Cpu {
-        let mmu = Mmu::new(MbcSelector::NoMbc);
+    fn init() -> Cpu<FlatMemory> {
+        let mmu = FlatMemory::new();
         let ppu = Ppu::new();
 
         Cpu::new(mmu, ppu, false, true)

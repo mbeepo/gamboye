@@ -1,7 +1,7 @@
-use crate::{cpu::Cpu, CpuFlag};
+use crate::{cpu::Cpu, memory::Memory, CpuFlag};
 
 /// CPU instructions in the Arithmetic Group. These implementations set all relevant flags
-impl Cpu {
+impl<T: Memory> Cpu<T> {
     // ---------- 8 bit ----------
     /// Adds two values
     ///
@@ -267,12 +267,12 @@ impl Cpu {
 mod tests {
     use crate::{
         cpu::{instructions::WordArithmeticTarget, ArithmeticTarget, Cpu, Instruction},
-        memory::{mbc::MbcSelector, Mmu},
+        memory::FlatMemory,
         ppu::Ppu,
     };
 
-    fn init() -> Cpu {
-        let mmu = Mmu::new(MbcSelector::NoMbc);
+    fn init() -> Cpu<FlatMemory> {
+        let mmu = FlatMemory::new();
         let ppu = Ppu::new();
 
         Cpu::new(mmu, ppu, false, true)
