@@ -1,8 +1,3 @@
-//! TODO:
-//!     Abstract over checking IO registers
-
-use std::default;
-
 use self::{
     bank::{VramBank, WramBank},
     init::init_io,
@@ -63,7 +58,16 @@ pub const HRAM: u16 = 0xFF80;
 /// Granular interrupt enable
 pub const IE: u16 = 0xFFFF;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MemoryType {
+    Io,
+    Memory,
+}
+
 pub trait Memory {
+    /// Returns whether the address should be used for IO operations or just as memory
+    fn memory_type(&self, addr: u16) -> MemoryType;
+
     /// Attempts to retrieve a byte of data from memory at the address `addr`
     ///
     /// ### Return Variants
@@ -74,10 +78,6 @@ pub trait Memory {
     fn load_rom(&mut self, data: &[u8]);
     
     /// Sets the cell at address `addr` to the value stored in `value`
-    ///
-    /// ### Side Effects
-    /// This method may have internal side effects, as listed below:
-    /// - If `addr` == `0xFF70`, the selected WRAM bank will be changed using the new value
     fn set(&mut self, addr: u16, value: u8);
 
     /// Splices a set of `values` into memory, starting at `start`
@@ -203,6 +203,12 @@ impl Mmu {
 }
 
 impl Memory for Mmu {
+    fn memory_type(&self, addr: u16) -> MemoryType {
+        match Self::translate(addr) {
+            MmuAddr::Io(_) => MemoryType::Io,
+            _ => MemoryType::Memory,
+        }
+    }
 
     /// Attempts to retrieve a byte of data from memory at the address `addr`
     ///
@@ -308,6 +314,10 @@ impl FlatMemory {
 }
 
 impl Memory for FlatMemory {
+    fn memory_type(&self, _addr: u16) -> MemoryType {
+        MemoryType::Memory
+    }
+
     fn load(&self, addr: u16) -> Option<u8> {
         Some(self.inner[addr as usize])
     }

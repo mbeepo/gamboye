@@ -33,14 +33,14 @@ impl<T: Memory> Cpu<T> {
     /// - The `carry` flag is set if the output wraps around `255` to `0`
     pub fn add_carry(&mut self, value: u8) -> u8 {
         let carry = if self.regs.f.carry { 1 } else { 0 };
-        let value = value + carry;
 
-        let (out, c_out) = self.regs.a.overflowing_add(value);
+        let (out, c_out1) = self.regs.a.overflowing_add(value);
+        let (out, c_out2) = out.overflowing_add(carry);
 
         self.set_flag(CpuFlag::Zero, out == 0);
         self.set_flag(CpuFlag::Subtract, false);
         self.set_flag(CpuFlag::HalfCarry, (self.regs.a & 0x0F) + (value & 0x0F) + carry > 0x0F);
-        self.set_flag(CpuFlag::Carry, c_out);
+        self.set_flag(CpuFlag::Carry, c_out1 || c_out2);
 
         out
     }
@@ -75,9 +75,9 @@ impl<T: Memory> Cpu<T> {
     /// - The `carry` flag is set if the output wraps around `0` to `255`
     pub fn sub_carry(&mut self, value: u8) -> u8 {
         let carry = if self.regs.f.carry { 1 } else { 0 };
-        let value = value + carry;
 
-        let (out, c_out) = self.regs.a.overflowing_sub(value);
+        let (out, c_out1) = self.regs.a.overflowing_sub(value);
+        let (out, c_out2) = out.overflowing_sub(carry);
 
         self.set_flag(CpuFlag::Zero, out == 0);
         self.set_flag(CpuFlag::Subtract, true);
@@ -87,7 +87,7 @@ impl<T: Memory> Cpu<T> {
                 .wrapping_sub(carry)
                 > 0x0F,
         );
-        self.set_flag(CpuFlag::Carry, c_out);
+        self.set_flag(CpuFlag::Carry, c_out1 || c_out2);
 
         out
     }

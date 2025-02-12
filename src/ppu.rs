@@ -1,14 +1,14 @@
-use std::{fmt::Display, ops::{Add, AddAssign, Index, IndexMut}};
+use std::ops::{Add, AddAssign};
+
+use objects::Object;
+use palettes::{Color, ObjPalettes, Palette};
+use regs::{Lcdc, Stat};
 
 use crate::{memory::{self, Memory, OAM, OAM_END, SCX, SCY, WX, WY}, Mmu};
 
-// darkening shades of grey
-const PALETTE: [Color; 4] = [
-    Color::from_u32(0xFFFFFFFF),
-    Color::from_u32(0xAAAAAAFF),
-    Color::from_u32(0x555555FF),
-    Color::from_u32(0x000000FF),
-];
+pub mod regs;
+pub mod palettes;
+pub mod objects;
 
 /// Width of the display, in pixels
 const WIDTH: u8 = 160;
@@ -38,44 +38,6 @@ const SIGNED_BASE: u16 = 0x9000;
 /// The scanline number that VBlank ends at
 const VBLANK_END: u8 = 154;
 
-#[derive(Clone, Copy, Debug)]
-pub struct Lcdc {
-    pub lcd_enable: bool,
-    pub window_map_area: u16,
-    pub window_enable: bool,
-    /// Whether background (and window) tiles should map to tile data in $8000-$87ff (unsigned) or $8800-$97ff (signed)
-    pub bg_addressing: AddressType,
-    /// The section of VRAM the background map is contained in, either $9800 or $9c00
-    // TODO: Enum
-    pub bg_map_area: u16,
-    pub obj_size: u8,
-    pub obj_enable: bool,
-    pub bg_enable: bool,
-}
-
-impl From<u8> for Lcdc {
-    fn from(value: u8) -> Self {
-        let lcd_enable = (value & 0b1000_0000) > 0;
-        let window_map_area = if (value & 0b0100_0000) == 0 { 0x9800 } else { 0x9c00 };
-        let window_enable = (value & 0b0010_0000) > 0;
-        let bg_addressing = if (value & 0b0001_0000) == 0 { AddressType::Signed } else { AddressType::Unsigned };
-        let bg_map_area = if (value & 0b0000_1000) == 0 { 0x9800 } else { 0x9c00 };
-        let obj_size = if (value & 0b0000_0100) == 0 { 8 } else { 16 };
-        let obj_enable = (value & 0b0000_0010) > 0;
-        let bg_enable = (value & 0b0000_0001) > 0;
-
-        Self {
-            lcd_enable,
-            window_map_area,
-            window_enable,
-            bg_addressing,
-            bg_map_area,
-            obj_size,
-            obj_enable,
-            bg_enable,
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug)]
 pub enum PpuMode {
@@ -95,188 +57,6 @@ impl From<PpuMode> for u8 {
             Mode3 => 3,
         }
     }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Stat {
-    pub int_lyc: bool,
-    pub int_mode2: bool,
-    pub int_mode1: bool,
-    pub int_mode0: bool,
-    pub lyc_match: bool,
-    pub mode: PpuMode,
-    /// Used to signal up to the CPU that a STAT interrupt should be triggered
-    pub int: bool,
-}
-
-impl Stat {
-    pub fn new() -> Self {
-        let mut out: Self = 0.into();
-        out.int = false;
-        out
-    }
-}
-
-impl From<u8> for Stat {
-    fn from(value: u8) -> Self {
-        let int_lyc     = (value & 0b0100_0000) > 0;
-        let int_mode2   = (value & 0b0010_0000) > 0;
-        let int_mode1   = (value & 0b0001_0000) > 0;
-        let int_mode0   = (value & 0b0000_1000) > 0;
-        let lyc_match   = false;
-        let mode = PpuMode::Mode0;
-        let int = true;
-
-        Self {
-            int_lyc,
-            int_mode2,
-            int_mode1,
-            int_mode0,
-            lyc_match,
-            mode,
-            int,
-        }
-    }
-}
-
-impl From<Stat> for u8 {
-    fn from(value: Stat) -> Self {
-        let int_lyc = if value.int_lyc { 0b0100_0000 } else { 0 };
-        let int_mode2 = if value.int_mode2 { 0b0010_0000 } else { 0 };
-        let int_mode1 = if value.int_mode1 { 0b0001_0000 } else { 0 };
-        let int_mode0 = if value.int_mode0 { 0b0000_1000 } else { 0 };
-        let lyc_match = if value.lyc_match { 0b0000_0100 } else { 0 };
-        let mode: u8 = value.mode.into();
-
-        int_lyc
-        | int_mode2
-        | int_mode1
-        | int_mode0
-        | lyc_match
-        | mode
-    }
-}
-
-#[derive(Debug)]
-pub struct Ppu {
-    pub lcdc: Lcdc,
-    pub stat: Stat,
-    pub coords: PpuCoords,
-    pub window_ly: u8,
-    pub palette: Palette,
-    pub obj_palettes: ObjPalettes,
-    pub fb: Vec<u8>,
-    pub objects: [Option<Object>; 10],
-    pub status: PpuStatus,
-    pub enabled: bool,
-    pub draw_ready: bool,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct ObjPalettes([Palette; 2]);
-
-impl ObjPalettes {
-    pub fn new() -> Self {
-        Self([Palette::new(), Palette::new()])
-    }
-}
-
-impl Index<u8> for ObjPalettes {
-    type Output = Palette;
-    
-    fn index(&self, index: u8) -> &Self::Output {
-        &self.0[index as usize]
-    }
-}
-
-impl IndexMut<u8> for ObjPalettes {    
-    fn index_mut(&mut self, index: u8) -> &mut Self::Output {
-        &mut self.0[index as usize]
-    }
-}
-
-impl Index<ObpSelector> for ObjPalettes {
-    type Output = Palette;
-
-    fn index(&self, index: ObpSelector) -> &Self::Output {
-        let index: usize = index.into();
-        &self.0[index]
-    }
-}
-
-impl IndexMut<ObpSelector> for ObjPalettes {
-    fn index_mut(&mut self, index: ObpSelector) -> &mut Self::Output {
-        let index: usize = index.into();
-        &mut self.0[index]
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Object {
-    y: u8,
-    x: u8,
-    index: u8,
-    attributes: ObjectAttributes,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct ObjectAttributes {
-    /// this one always tricks me when it's 0 it is able to be drawn on top of bg
-    /// and when it's 1 it's only drawn on top of bg color 0
-    pub priority: bool,
-    pub y_flip: bool,
-    pub x_flip: bool,
-    pub dmg_palette: ObpSelector,
-    // // these are for cgb only, so i'll leave them commented for now
-    // pub bank: VramBankSelector,
-    // pub cgb_palette: CgbPaletteSelector 
-}
-
-impl From<u8> for ObjectAttributes {
-    fn from(value: u8) -> Self {
-        let priority = (value & 0b1000_0000) > 0;
-        let y_flip = (value & 0b0100_0000) > 0;
-        let x_flip = (value & 0b0010_0000) > 0;
-        let dmg_palette = value.into();
-
-        Self {
-            priority,
-            y_flip,
-            x_flip,
-            dmg_palette
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum ObpSelector {
-    Obp0,
-    Obp1,
-}
-
-impl From<u8> for ObpSelector {
-    fn from(value: u8) -> Self {
-        match (value & 0b0001_0000) >> 4 {
-            0 => Self::Obp0,
-            1 => Self::Obp1,
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl From<ObpSelector> for usize {
-    fn from(value: ObpSelector) -> Self {
-        match value {
-            ObpSelector::Obp0 => 0,
-            ObpSelector::Obp1 => 1,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum AddressType {
-    Unsigned,
-    Signed,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -327,8 +107,24 @@ impl From<(u8, u8)> for PpuCoords {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Palette {
-    colors: [Color; 4],
+pub enum AddressType {
+    Unsigned,
+    Signed,
+}
+
+impl AddressType {
+    fn convert_offset(&self, index: u8) -> u16 {
+        match self {
+            AddressType::Unsigned => {
+                let offset = index as u16 * 16;
+                UNSIGNED_BASE + offset
+            },
+            AddressType::Signed => {
+                let offset = index as i8 as i16 * 16;
+                SIGNED_BASE.wrapping_add(offset as u16)
+            },
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -339,105 +135,19 @@ pub enum PpuStatus {
     HBlank,
 }
 
-impl Palette {
-    fn new() -> Self {
-        let colors = Self::from_bgp(0b00011011);
-
-        Self { colors }
-    }
-
-    fn update(&mut self, bgp: u8) {
-        self.colors = Self::from_bgp(bgp);
-    }
-
-    fn from_bgp(bgp: u8) -> [Color; 4] {
-        let color0 =  bgp       & 0b11;
-        let color1 = (bgp >> 2) & 0b11;
-        let color2 = (bgp >> 4) & 0b11;
-        let color3 = (bgp >> 6) & 0b11;
-        
-        let mut color0 = PALETTE[color0 as usize];
-        color0.transparent = true;
-
-        [
-            color0,
-            PALETTE[color1 as usize],
-            PALETTE[color2 as usize],
-            PALETTE[color3 as usize],
-        ]
-    }
-}
-
-impl Index<u8> for Palette {
-    type Output = Color;
-
-    fn index(&self, index: u8) -> &Self::Output {
-        &self.colors[index as usize]
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PaletteColor {
-    Color0,
-    Color1,
-    Color2,
-    Color3,
-}
-
-impl Index<PaletteColor> for Palette {
-    type Output = Color;
-
-    fn index(&self, index: PaletteColor) -> &Self::Output {
-        use PaletteColor::*;
-
-        match index {
-            Color0 => &self[0],
-            Color1 => &self[1],
-            Color2 => &self[2],
-            Color3 => &self[3],
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum PaletteError {
-    OutOfRange,
-}
-
-impl TryFrom<u8> for PaletteColor {
-    type Error = PaletteError;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::Color0),
-            1 => Ok(Self::Color1),
-            2 => Ok(Self::Color2),
-            3 => Ok(Self::Color3),
-            _ => Err(PaletteError::OutOfRange),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Color {
-    inner: u32,
-    transparent: bool,
-}
-
-impl Color {
-    const fn from_u32(inner: u32) -> Self {
-        Self { inner, transparent: false }
-    }
-
-    fn to_be_bytes(self) -> [u8; 4] {
-        self.inner.to_be_bytes()
-    }
-}
-
-impl Display for Color {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Color {{ inner: {:#010X}, transparent: {} }}", self.inner, self.transparent)
-    }
+#[derive(Debug)]
+pub struct Ppu {
+    pub lcdc: Lcdc,
+    pub stat: Stat,
+    pub coords: PpuCoords,
+    pub window_ly: u8,
+    pub palette: Palette,
+    pub obj_palettes: ObjPalettes,
+    pub fb: Vec<u8>,
+    pub objects: [Option<Object>; 10],
+    pub status: PpuStatus,
+    pub enabled: bool,
+    pub draw_ready: bool,
 }
 
 impl Ppu {
@@ -583,7 +293,7 @@ impl Ppu {
                 let mut obj_y_offset = self.obj_y_offset(&obj).expect("Y offset out of range"); // this motherfucker right here
 
                 if obj.attributes.y_flip {
-                    obj_y_offset = self.lcdc.obj_size - 1 - obj_y_offset;
+                    obj_y_offset = self.lcdc.obj_size as u8 - 1 - obj_y_offset;
                 }
                 // get the address of the current object line
                 let obj_data_addr = (UNSIGNED_BASE + obj.index as u16 * TILE_BYTES as u16) + (obj_y_offset as u16 * ROW_SIZE as u16);
@@ -804,13 +514,13 @@ impl Ppu {
 
         for obj in objects.chunks(4).map(|e| {
             let mut out = Object::from(e);
-            if self.lcdc.obj_size == 16 {
+            if self.lcdc.obj_size as u8 == 16 {
                 out.index &= 0xFE;
             }
             out
         }) {                        
             let offset = self.obj_y_offset(&obj);
-            if offset.is_some_and(|e| e < self.lcdc.obj_size) {
+            if offset.is_some_and(|e| e < self.lcdc.obj_size as u8) {
                 out.push(obj);
                 obj_count += 1;
 
@@ -836,36 +546,6 @@ impl Ppu {
                     self.stat.lyc_match = false;
                 }
             }
-        }
-    }
-}
-
-impl AddressType {
-    fn convert_offset(&self, index: u8) -> u16 {
-        match self {
-            AddressType::Unsigned => {
-                let offset = index as u16 * 16;
-                UNSIGNED_BASE + offset
-            },
-            AddressType::Signed => {
-                let offset = index as i8 as i16 * 16;
-                SIGNED_BASE.wrapping_add(offset as u16)
-            },
-        }
-    }
-}
-
-impl From<&[u8]> for Object {
-    fn from(value: &[u8]) -> Self {
-        if value.len() == 4 {
-            Self {
-                y: value[0],
-                x: value[1],
-                index: value[2],
-                attributes: value[3].into()
-            }
-        } else {
-            Self { y: 0, x: 0, index: 0, attributes: 0.into() }
         }
     }
 }

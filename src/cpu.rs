@@ -2,7 +2,7 @@ use core::fmt;
 use std::{fmt::Display, fs::File, io::Write};
 
 use crate::{
-    input::{HostInput, Joyp}, memory::{self, Memory, Mmu, LCDC}, ppu::Ppu, PpuStatus
+    input::{HostInput, Joyp}, memory::{self, Memory, MemoryType, Mmu, LCDC}, ppu::Ppu, PpuStatus
 };
 
 use self::instructions::{
@@ -778,36 +778,42 @@ impl<T: Memory> Cpu<T> {
         self.tick();
         self.push_event(CpuEvent::MemoryRead(addr));
 
-        let out = match addr {
-            memory::DIV => {
-                Ok((self.div >> 8) as u8)
-            }
-            _ => {
-                if !self.ppu.enabled {
-                    if addr == memory::LY {
-                        return Ok(0xFF);
-                    }
-                } else {
-                    if addr == memory::JOYP {
-                        let gorp = self.joyp.serialize(self.host_input);
-                        return Ok(gorp);
-                    } else if addr == memory::STAT {
-                        return Ok(self.ppu.stat.into());
-                    }
+        let out = if self.memory.memory_type(addr) == MemoryType::Memory {
+            if let Some(out) = self.memory.load(addr) {
+                if self.debug {
+                    self.dbg(format!(" -> {:#04X}\n", out));
                 }
-
-                if let Some(out) = self.memory.load(addr) {
-                    if self.debug {
-                        self.dbg(format!(" -> {:#04X}\n", out));
-                    }
-        
-                    Ok(out)
+    
+                Ok(out)
+            } else {
+                self.dbg(" = [uninit]\n");
+                if self.allow_uninit {
+                    Ok(0)
                 } else {
-                    self.dbg(" = [uninit]\n");
-                    if self.allow_uninit {
-                        Ok(0)
+                    Err(CpuError::MemoryLoadFail(addr))
+                }
+            }
+        } else {
+            match addr {
+                memory::DIV => {
+                    Ok((self.div >> 8) as u8)
+                }
+                _ => {
+                    if !self.ppu.enabled {
+                        if addr == memory::LY {
+                            Ok(0xFF)
+                        } else {
+                            Ok(self.ppu.coords.y)
+                        }
                     } else {
-                        Err(CpuError::MemoryLoadFail(addr))
+                        if addr == memory::JOYP {
+                            let gorp = self.joyp.serialize(self.host_input);
+                            Ok(gorp)
+                        } else if addr == memory::STAT {
+                            Ok(self.ppu.stat.into())
+                        } else {
+                            Ok(0xFF)
+                        }
                     }
                 }
             }
@@ -824,9 +830,10 @@ impl<T: Memory> Cpu<T> {
         self.push_event(CpuEvent::MemoryWrite(addr));
         self.tick();
 
-        // if self.oam_dma_running() && addr < memory::HRAM {
-        //     return;
-        // }
+        if self.memory.memory_type(addr) == MemoryType::Memory {
+            self.memory.set(addr, value);
+            return;
+        }
 
         match addr {
             memory::JOYP => {
