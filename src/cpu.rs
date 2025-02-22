@@ -798,23 +798,22 @@ impl<T: Memory> Cpu<T> {
                 memory::DIV => {
                     Ok((self.div >> 8) as u8)
                 }
-                _ => {
+                memory::LY => {
                     if !self.ppu.enabled {
-                        if addr == memory::LY {
-                            Ok(0xFF)
-                        } else {
-                            Ok(self.ppu.coords.y)
-                        }
+                        Ok(0xFF)
                     } else {
-                        if addr == memory::JOYP {
-                            let gorp = self.joyp.serialize(self.host_input);
-                            Ok(gorp)
-                        } else if addr == memory::STAT {
-                            Ok(self.ppu.stat.into())
-                        } else {
-                            Ok(0xFF)
-                        }
+                        Ok(self.ppu.coords.y)
                     }
+                }
+                memory::JOYP => {
+                    let gorp = self.joyp.serialize(self.host_input);
+                    Ok(gorp)
+                }
+                memory::STAT => {
+                    Ok(self.ppu.stat.into())
+                }
+                _ => {
+                    Ok(0xFF)
                 }
             }
         };

@@ -284,12 +284,10 @@ impl Ppu {
 
         let color = obj.find_map(|obj| {
             if !self.lcdc.obj_enable {
+                None
+            } else if obj.attributes.priority && !bg_color.transparent {
                 Some(bg_color)
             } else {
-                if obj.attributes.priority && !bg_color.transparent {
-                    return Some(bg_color);
-                }
-
                 let mut obj_y_offset = self.obj_y_offset(&obj).expect("Y offset out of range"); // this motherfucker right here
 
                 if obj.attributes.y_flip {
@@ -332,34 +330,21 @@ impl Ppu {
     /// 
     /// `[pos]` is a *global* position within the full 256x256 px picture
     pub fn get_bg_pixel<T: Memory>(&self, memory: &T, pos: PpuCoords) -> Color {
-        let address_type = self.lcdc.bg_addressing;
-        let bg_map_start = self.lcdc.bg_map_area;
-        
-        let tile_x = pos.x / TILE_WIDTH % WIDTH_IN_TILES;
-        let tile_y = pos.y / TILE_HEIGHT;
-
-        let tilemap_offset = tile_x as u16 + (tile_y as u16 * WIDTH_IN_TILES as u16);
-        let tilemap_addr = bg_map_start + tilemap_offset;
-
-        let tile_index = memory.load(tilemap_addr).unwrap_or(0);
-        let tile_y_offset = pos.y % TILE_HEIGHT;
-
-        let tile_data_addr = address_type.convert_offset(tile_index);
-        let tile_row_addr = tile_data_addr + tile_y_offset as u16 * ROW_SIZE as u16;
-        let tile_row = memory.load_block(tile_row_addr, tile_row_addr+1);
-
-        self.decode_color(&tile_row, pos.x % 8)
+        self.get_pixel(memory, pos, self.lcdc.bg_map_area)
     }
 
     pub fn get_window_pixel<T: Memory>(&self, memory: &T, pos: PpuCoords) -> Color {
+        self.get_pixel(memory, pos, self.lcdc.window_map_area)
+    }
+
+    fn get_pixel<T: Memory>(&self, memory: &T, pos: PpuCoords, map_start: u16) -> Color {
         let address_type = self.lcdc.bg_addressing;
-        let window_map_start = self.lcdc.window_map_area;
         
         let tile_x = pos.x / TILE_WIDTH % WIDTH_IN_TILES;
         let tile_y = pos.y / TILE_HEIGHT;
 
         let tilemap_offset = tile_x as u16 + (tile_y as u16 * WIDTH_IN_TILES as u16);
-        let tilemap_addr = window_map_start + tilemap_offset;
+        let tilemap_addr = map_start + tilemap_offset;
 
         let tile_index = memory.load(tilemap_addr).unwrap_or(0);
         let tile_y_offset = pos.y % TILE_HEIGHT;
