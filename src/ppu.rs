@@ -284,10 +284,12 @@ impl Ppu {
 
         let color = obj.find_map(|obj| {
             if !self.lcdc.obj_enable {
-                None
-            } else if obj.attributes.priority && !bg_color.transparent {
                 Some(bg_color)
-            } else {
+            } else { 
+                if obj.attributes.priority && !bg_color.transparent {
+                    return Some(bg_color)
+                }
+
                 let mut obj_y_offset = self.obj_y_offset(&obj).expect("Y offset out of range"); // this motherfucker right here
 
                 if obj.attributes.y_flip {

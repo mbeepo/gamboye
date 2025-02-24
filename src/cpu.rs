@@ -772,49 +772,53 @@ impl<T: Memory> Cpu<T> {
     /// - `Ok(value)` if a byte was read successfully
     /// - `Err(addr)` if the byte at the address was uninitialized, and `Self::allow_uninit` is false
     fn mem_load(&mut self, addr: u16) -> Result<u8, CpuError> {
+        fn mem_load_flat<T: Memory>(sys: &mut Cpu<T>, addr: u16) -> Result<u8, CpuError> {
+            if let Some(out) = sys.memory.load(addr) {
+                if sys.debug {
+                    sys.dbg(format!(" -> {:#04X}\n", out));
+                }
+    
+                Ok(out)
+            } else {
+                sys.dbg(" = [uninit]\n");
+                if sys.allow_uninit {
+                    Ok(0)
+                } else {
+                    Err(CpuError::MemoryLoadFail(addr))
+                }
+            }
+        }
+
         if self.debug {
             self.dbg(format!("[LOAD] {:#06X}", addr));
         }
         self.tick();
         self.push_event(CpuEvent::MemoryRead(addr));
 
-        let out = if self.memory.memory_type(addr) == MemoryType::Memory {
-            if let Some(out) = self.memory.load(addr) {
-                if self.debug {
-                    self.dbg(format!(" -> {:#04X}\n", out));
-                }
-    
-                Ok(out)
-            } else {
-                self.dbg(" = [uninit]\n");
-                if self.allow_uninit {
-                    Ok(0)
+        if self.memory.memory_type(addr) == MemoryType::Memory {
+            return mem_load_flat(self, addr);
+        }
+
+        let out = match addr {
+            memory::DIV => {
+                Ok((self.div >> 8) as u8)
+            }
+            memory::LY => {
+                if !self.ppu.enabled {
+                    Ok(0xFF)
                 } else {
-                    Err(CpuError::MemoryLoadFail(addr))
+                    Ok(self.ppu.coords.y)
                 }
             }
-        } else {
-            match addr {
-                memory::DIV => {
-                    Ok((self.div >> 8) as u8)
-                }
-                memory::LY => {
-                    if !self.ppu.enabled {
-                        Ok(0xFF)
-                    } else {
-                        Ok(self.ppu.coords.y)
-                    }
-                }
-                memory::JOYP => {
-                    let gorp = self.joyp.serialize(self.host_input);
-                    Ok(gorp)
-                }
-                memory::STAT => {
-                    Ok(self.ppu.stat.into())
-                }
-                _ => {
-                    Ok(0xFF)
-                }
+            memory::JOYP => {
+                let gorp = self.joyp.serialize(self.host_input);
+                Ok(gorp)
+            }
+            memory::STAT => {
+                Ok(self.ppu.stat.into())
+            }
+            _ => {
+                mem_load_flat(self, addr)
             }
         };
         
